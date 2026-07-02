@@ -469,6 +469,40 @@
     text-align:center;
     box-shadow:0 2px 8px rgba(0,0,0,0.15);
   }
+  .ff-spark{
+    width:100%;
+    height:44px;
+    margin-top:8px;
+    display:block;
+  }
+  .ff-spark-cap{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    color:var(--ink-soft);
+    margin:2px 0 0;
+  }
+  .ff-mini-btn{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    background:none;
+    border:1px solid var(--brass);
+    color:var(--brass-dark);
+    border-radius:7px;
+    padding:6px 11px;
+    margin:0 8px 0 0;
+    cursor:pointer;
+  }
+  .ff-trip-note{
+    width:100%;
+    box-sizing:border-box;
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+    border:1px solid var(--parchment-dim);
+    border-radius:8px;
+    padding:8px;
+    margin:8px 0;
+    min-height:56px;
+  }
   .ff-card-alts{
     margin-top:14px;
     padding-top:12px;
@@ -540,6 +574,7 @@
     <div class="ff-result-list" id="searchResults"></div>
     <button class="ff-skip" id="skipSearch" type="button">Skip, I'll set it up manually &rarr;</button>
     <button class="ff-skip" id="exploreBtn" type="button">Explore the map &rarr;</button>
+    <button class="ff-skip" id="mySpotsBtn" type="button" style="display:none">My spots &amp; trip log &rarr;</button>
   </div>
 
   <div class="ff-step" data-step="1">
@@ -634,7 +669,7 @@
 
 <script>
 (function(){
-  var state = {location:null, notes:null, gauge:null, tide:null, bestWindow:null, access:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
+  var state = {location:null, notes:null, aiRefine:null, gauge:null, tide:null, bestWindow:null, access:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
   var currentStep = 0;
   var resultMap = null;
 
@@ -662,9 +697,14 @@
     var noteEl = document.getElementById('speciesNote');
     wrap.innerHTML = '';
     noteEl.textContent = '';
-    // curated waters carry their own species list; otherwise use the water type
+    // curated waters carry their own species list; otherwise use the water
+    // type, narrowed by the AI section read when the worker is deployed
     var list = (state.notes && state.notes.species) ? state.notes.species.slice()
              : (speciesByWater[state.water] || speciesByWater.river).slice();
+    if(!(state.notes && state.notes.species) && state.aiRefine && state.aiRefine.species){
+      var refined = list.filter(function(k){ return state.aiRefine.species.indexOf(k) !== -1; });
+      if(refined.length) list = refined;
+    }
     // real gauge water temp beats assumptions: hide coldwater species where
     // the water is demonstrably too warm for them right now
     var g = state.gauge;
@@ -897,29 +937,40 @@
       if(currentStep === 2){
         renderSpeciesOptions();
       }
+      refreshResult();
 
       if(site.flow != null){
-        fetch('https://waterservices.usgs.gov/nwis/iv/?format=json&sites=' + site.code + '&parameterCd=00060&period=P1D')
+        fetch('https://waterservices.usgs.gov/nwis/iv/?format=json&sites=' + site.code + '&parameterCd=00060&period=P7D')
           .then(function(r){ return r.json(); })
           .then(function(hist){
             var ts = hist.value && hist.value.timeSeries && hist.value.timeSeries[0];
             var vals = ts && ts.values[0] && ts.values[0].value;
-            if(vals && vals.length > 1){
-              var first = parseFloat(vals[0].value);
-              var last = parseFloat(vals[vals.length - 1].value);
-              if(first > 0 && !isNaN(last)){
-                var pct = (last - first) / first * 100;
-                site.trendPct = Math.round(pct);
-                site.trend = pct > 15 ? 'rising' : (pct < -15 ? 'falling' : 'steady');
-                renderGaugeStatus();
-              }
+            if(!vals || vals.length < 2) return;
+            var nums = vals.map(function(v){ return parseFloat(v.value); }).filter(function(n){ return !isNaN(n) && n !== -999999; });
+            if(nums.length < 2) return;
+            // 24h trend: readings are evenly spaced across ~7 days
+            var perDay = Math.max(1, Math.round(nums.length / 7));
+            var dayAgo = nums[Math.max(0, nums.length - 1 - perDay)];
+            var last = nums[nums.length - 1];
+            if(dayAgo > 0){
+              var pct = (last - dayAgo) / dayAgo * 100;
+              site.trendPct = Math.round(pct);
+              site.trend = pct > 15 ? 'rising' : (pct < -15 ? 'falling' : 'steady');
             }
+            // downsample the week to ~56 points for the sparkline
+            var step = Math.max(1, Math.floor(nums.length / 56));
+            site.history = nums.filter(function(_, i){ return i % step === 0; });
+            renderGaugeStatus();
+            refreshResult();
           }).catch(function(){});
       }
     }).catch(function(){});
   }
 
   var GEOAPIFY_KEY = '714aba9f92134abdb5840cba44fda0dd';
+  // Cloudflare Worker that refines species/notes per exact river section
+  // (see worker/README.md). Leave empty to disable the AI features.
+  var REFINE_URL = '';
 
   // rough IP-based location so search results rank nearby waters first
   var ipBias = null;
@@ -975,14 +1026,23 @@
       }
       state.tide = {nextHigh: nextHigh, nextLow: nextLow, direction: dir};
       renderTideStatus();
+      refreshResult();
     }).catch(function(){});
   }
 
+  // mail.ru's mirror lacks CORS headers, so it never works from a browser;
+  // retry the primary last since its 504s are usually transient
   var OVERPASS_ENDPOINTS = [
     'https://overpass-api.de/api/interpreter',
-    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
-    'https://overpass.kumi.systems/api/interpreter'
+    'https://overpass.kumi.systems/api/interpreter',
+    'https://overpass-api.de/api/interpreter'
   ];
+
+  // slow upstreams (USGS can take 15s+) may finish after the result page
+  // is already showing — re-render it so their cards appear late
+  function refreshResult(){
+    if(currentStep === 5) renderResult();
+  }
 
   function overpassFetch(q, idx){
     idx = idx || 0;
@@ -1031,7 +1091,10 @@
     // "Au Sable River Access" -> "Au Sable": the distinctive part before the water word
     var stem = name.split(movingWord)[0].replace(/[.*+?^${}()|[\]\\"']/g, ' ').replace(/\s+/g, ' ').trim();
     var done = function(spots){
-      if(spots && spots.length) state.access = spots.slice(0, 6);
+      if(spots && spots.length){
+        state.access = spots.slice(0, 6);
+        refreshResult();
+      }
     };
     if(movingWord.test(name) && stem){
       // follow the river itself: access points within 400m of any matching
@@ -1156,6 +1219,80 @@
      stretches:'Riverton down through New Hartford is the heart of it.'}
   ];
   WATER_NOTES.forEach(function(n){ n.re = new RegExp(n.match, 'i'); });
+
+  var stateRegion = {
+    'Connecticut':'northeast','Maine':'northeast','Massachusetts':'northeast','New Hampshire':'northeast','New Jersey':'northeast','New York':'northeast','Pennsylvania':'northeast','Rhode Island':'northeast','Vermont':'northeast','Maryland':'northeast','Delaware':'northeast','West Virginia':'northeast','Virginia':'northeast',
+    'Michigan':'midwest','Wisconsin':'midwest','Minnesota':'midwest','Ohio':'midwest','Indiana':'midwest','Illinois':'midwest','Iowa':'midwest','Missouri':'midwest','North Dakota':'midwest','South Dakota':'midwest','Nebraska':'midwest','Kansas':'midwest',
+    'North Carolina':'southeast','South Carolina':'southeast','Georgia':'southeast','Florida':'southeast','Alabama':'southeast','Tennessee':'southeast','Kentucky':'southeast','Mississippi':'southeast','Louisiana':'southeast','Arkansas':'southeast',
+    'Montana':'rockies','Wyoming':'rockies','Colorado':'rockies','Idaho':'rockies','Utah':'rockies',
+    'Arizona':'southwest','New Mexico':'southwest','Texas':'southwest','Oklahoma':'southwest','Nevada':'southwest',
+    'California':'west','Oregon':'west','Washington':'west','Alaska':'west','Hawaii':'west'
+  };
+
+  // month-keyed major hatches per region; shown for trout/steelhead water
+  var HATCHES = {
+    midwest: [
+      {m:[3,4], name:'Early black stones & BWOs', tip:'#16–20, warm afternoons', term:'blue winged olive'},
+      {m:[4,5], name:'Hendricksons', tip:'#12–14 duns, early afternoon', term:'hendrickson fly'},
+      {m:[5,6], name:'Sulphurs & gray drakes', tip:'#14–16, evenings', term:'sulphur dun fly'},
+      {m:[6,7], name:'Hex & brown drakes', tip:'dusk into dark over silt', term:'hex fly'},
+      {m:[7,8], name:'Tricos & terrestrials', tip:'spinners at dawn, hoppers midday', term:'trico spinner'},
+      {m:[9,10,11], name:'Fall BWOs & streamer season', tip:'olives on drizzle, streamers for browns', term:'blue winged olive'},
+      {m:[12,1,2], name:'Midges', tip:'#20–24, slow deep water, midday', term:'midge fly'}
+    ],
+    northeast: [
+      {m:[3,4], name:'Quill Gordons & early stones', tip:'#12–14 as water hits 50°F', term:'quill gordon'},
+      {m:[4,5], name:'Hendricksons', tip:'#12–14, bank on the afternoon spinner fall', term:'hendrickson fly'},
+      {m:[5,6], name:'March browns & sulphurs', tip:'#10–16, evenings get better as June nears', term:'sulphur dun fly'},
+      {m:[6,7], name:'Sulphurs & isonychia', tip:'#12–16, dusk', term:'isonychia fly'},
+      {m:[7,8], name:'Tricos & terrestrials', tip:'early spinners, ants and beetles after', term:'trico spinner'},
+      {m:[9,10,11], name:'Fall BWOs & streamers', tip:'#18–20 olives, streamers on high water', term:'blue winged olive'},
+      {m:[12,1,2], name:'Midges & little black stones', tip:'#18–24, midday warmth', term:'midge fly'}
+    ],
+    southeast: [
+      {m:[2,3,4], name:'Quill Gordons & Blue Quills', tip:'#12–18, pre-spawn window in the mountains', term:'quill gordon'},
+      {m:[4,5], name:'Hendricksons & March browns', tip:'#10–14', term:'hendrickson fly'},
+      {m:[5,6], name:'Sulphurs & Light Cahills', tip:'#14–18, evenings', term:'light cahill fly'},
+      {m:[6,8], name:'Terrestrials', tip:'inchworms, ants, beetles — high-stick the pockets', term:'inchworm fly'},
+      {m:[9,11], name:'Fall BWOs & October caddis', tip:'#18–20 olives, #10 orange caddis', term:'october caddis'},
+      {m:[12,1], name:'Midges & winter stones', tip:'#20–24, tailwaters fish all winter', term:'midge fly'}
+    ],
+    rockies: [
+      {m:[3,4], name:'Midges & early baetis', tip:'#18–22, pre-runoff window', term:'baetis fly'},
+      {m:[5,6], name:'Mother\'s Day caddis & runoff', tip:'#14–16 caddis before the melt blows out', term:'elk hair caddis'},
+      {m:[6,7], name:'Salmonflies & golden stones', tip:'#4–8 — follow the hatch upstream', term:'salmonfly'},
+      {m:[7,8], name:'PMDs, hoppers & rusty spinners', tip:'#14–18 mornings, hoppers on wind', term:'pmd fly'},
+      {m:[9,10], name:'Fall baetis & October caddis', tip:'#18–22 olives on grey days', term:'baetis fly'},
+      {m:[11,2], name:'Midges', tip:'#20–24, tailwaters and warm afternoons', term:'midge fly'}
+    ],
+    west: [
+      {m:[2,4], name:'March browns & skwalas', tip:'#10–14, first real dry-fly window', term:'skwala fly'},
+      {m:[5,6], name:'Salmonflies & golden stones', tip:'#4–8 on freestones', term:'salmonfly'},
+      {m:[6,7], name:'PMDs & green drakes', tip:'#10–16, overcast mornings', term:'green drake fly'},
+      {m:[7,9], name:'Hoppers & October caddis start', tip:'banks and foam lines', term:'hopper fly'},
+      {m:[9,11], name:'October caddis & fall baetis', tip:'#8–10 orange caddis, #18–22 olives', term:'october caddis'},
+      {m:[12,1], name:'Midges & winter baetis', tip:'#18–24, midday', term:'midge fly'}
+    ],
+    southwest: [
+      {m:[1,3], name:'Midges & winter baetis', tip:'#20–24, tailwater staple', term:'midge fly'},
+      {m:[4,6], name:'Caddis & PMDs', tip:'#14–18, evenings', term:'elk hair caddis'},
+      {m:[7,9], name:'Terrestrials & monsoon cicadas', tip:'hoppers, ants, and big dries after rain', term:'cicada fly'},
+      {m:[10,12], name:'Fall baetis & midges', tip:'#18–24 on grey afternoons', term:'baetis fly'}
+    ]
+  };
+
+  function likelyHatches(){
+    if(state.species !== 'trout' && state.species !== 'steelhead') return null;
+    var region = state.location && stateRegion[state.location.state];
+    if(!region || !HATCHES[region]) return null;
+    var month = new Date().getMonth() + 1;
+    var hits = HATCHES[region].filter(function(h){
+      // m is [start, end] inclusive, possibly wrapping the year end
+      var a = h.m[0], b = h.m[h.m.length - 1];
+      return a <= b ? (month >= a && month <= b) : (month >= a || month <= b);
+    });
+    return hits.length ? hits : null;
+  }
 
   function findWaterNotes(name, stateName){
     if(!name || !stateName) return null;
@@ -1401,6 +1538,29 @@
     if(value === 'ocean' && state.location){
       fetchTides(state.location.lat, state.location.lon);
     }
+    refineLocation(value);
+  }
+
+  // ask the worker (if deployed) which candidates actually live in this
+  // exact section; refine the species list and stash the AI read
+  function refineLocation(water){
+    state.aiRefine = null;
+    if(!REFINE_URL || !state.location || state.location.lat == null) return;
+    var loc = state.location;
+    fetch(REFINE_URL, {
+      method: 'POST',
+      headers: {'Content-Type': 'application/json'},
+      body: JSON.stringify({
+        name: loc.name, state: loc.state, lat: loc.lat, lon: loc.lon,
+        water: water, candidates: speciesByWater[water] || []
+      })
+    }).then(function(r){ return r.json(); }).then(function(d){
+      if(!d || !d.species || !d.species.length) return;
+      if(loc !== state.location) return; // user moved on to another spot
+      state.aiRefine = d;
+      if(currentStep === 2) renderSpeciesOptions();
+      refreshResult();
+    }).catch(function(){});
   }
 
   // guess the water type from the name so we can skip the obvious question
@@ -1462,7 +1622,7 @@
   });
 
   document.getElementById('restartBtn').addEventListener('click', function(){
-    state = {location:null, notes:null, gauge:null, tide:null, bestWindow:null, access:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
+    state = {location:null, notes:null, aiRefine:null, gauge:null, tide:null, bestWindow:null, access:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
     document.querySelectorAll('.ff-opt, .ff-chip, .ff-dir').forEach(function(b){ b.classList.remove('selected'); });
     document.getElementById('locateStatus').textContent = '';
     document.getElementById('gaugeStatus').textContent = '';
@@ -1470,6 +1630,7 @@
     document.getElementById('searchStatus').textContent = '';
     document.getElementById('searchResults').innerHTML = '';
     document.getElementById('searchInput').value = '';
+    updateMySpotsBtn();
     goToStep(0);
   });
 
@@ -1867,6 +2028,10 @@
     html += '<p class="ff-result-tag">Your match</p>';
     if(state.location){
       html += '<p class="ff-location-tag">' + state.location.name + (state.location.region ? ', ' + state.location.region : '') + '</p>';
+      html += '<p><button class="ff-mini-btn" id="saveSpotBtn" type="button">&#9733; Save spot</button>' +
+              '<button class="ff-mini-btn" id="logTripBtn" type="button">Log this trip</button></p>' +
+              '<div id="tripForm" style="display:none"><textarea class="ff-trip-note" id="tripNote" placeholder="How did it fish? What ate?"></textarea>' +
+              '<button class="ff-mini-btn" id="tripSaveBtn" type="button">Save to trip log</button></div>';
     }
     html += '<div class="ff-card">';
     html += '<p class="ff-card-fly">' + rec.primary + '</p>';
@@ -1884,6 +2049,12 @@
       html += '</div>';
     }
     html += '</div>';
+
+    if(state.aiRefine && state.aiRefine.read){
+      var aiBody = state.aiRefine.read +
+        (state.aiRefine.regs ? ' <strong>Regulations:</strong> ' + state.aiRefine.regs : '');
+      html += '<div class="ff-info-card"><p class="ff-info-label">This stretch (AI read — verify independently)</p><p class="ff-info-body">' + aiBody + '</p></div>';
+    }
 
     if(state.notes){
       var n = state.notes;
@@ -1939,7 +2110,7 @@
         flowBody += ' Water temp at the gauge: ' + g.waterTempF + '°F.';
       }
       flowBody += ' <a href="https://waterdata.usgs.gov/monitoring-location/' + g.code + '" target="_blank" rel="noopener">Live gauge &amp; graphs ↗</a>';
-      html += '<div class="ff-info-card"><p class="ff-info-label">River flow (USGS, ' + g.dist.toFixed(1) + ' mi away)</p><p class="ff-info-body">' + flowBody + '</p></div>';
+      html += '<div class="ff-info-card"><p class="ff-info-label">River flow (USGS, ' + g.dist.toFixed(1) + ' mi away)</p><p class="ff-info-body">' + flowBody + '</p>' + sparklineSvg(g.history) + '</div>';
     }
 
     if(state.access && state.access.length){
@@ -1960,6 +2131,15 @@
       html += '<div class="ff-info-card"><p class="ff-info-label">Know before you go</p><p class="ff-info-body">Make sure your ' + st + ' fishing license is current before you head out, and check local regulations for the water you\'re fishing — seasons, size limits, and special gear rules vary. <a href="https://www.google.com/search?q=' + encodeURIComponent(st + ' fishing license regulations') + '" target="_blank" rel="noopener">Check ' + st + ' rules ↗</a></p></div>';
     }
 
+    var hatches = likelyHatches();
+    if(hatches){
+      var hHtml = '';
+      hatches.forEach(function(h){
+        hHtml += '<p class="ff-alt-item"><strong>' + h.name + '</strong> — ' + h.tip + ' · <a href="' + shopUrl(h.term) + '" target="_top">shop ↗</a></p>';
+      });
+      html += '<div class="ff-info-card"><p class="ff-info-label">Likely hatches now</p>' + hHtml + '</div>';
+    }
+
     html += '<div class="ff-info-card"><p class="ff-info-label">What to expect this time of year</p><p class="ff-info-body">' + forage + '</p></div>';
     html += '<div class="ff-info-card"><p class="ff-info-label">Working from ' + state.method + '</p><p class="ff-info-body">' + method + '</p></div>';
     if(wind){
@@ -1977,10 +2157,119 @@
     // wait until goToStep(5) has made the result step visible, otherwise
     // Leaflet measures a display:none container and renders a blank map
     setTimeout(renderMap, 60);
+    attachResultActions(rec);
 
     try{
       localStorage.setItem('ffLast', JSON.stringify({location: state.location, water: state.water, species: state.species, method: state.method}));
     }catch(e){}
+  }
+
+  function loadList(key){
+    try{ return JSON.parse(localStorage.getItem(key) || '[]'); }catch(e){ return []; }
+  }
+  function saveList(key, list){
+    try{ localStorage.setItem(key, JSON.stringify(list)); }catch(e){}
+  }
+
+  function attachResultActions(rec){
+    var saveBtn = document.getElementById('saveSpotBtn');
+    var logBtn = document.getElementById('logTripBtn');
+    if(!saveBtn) return;
+    saveBtn.addEventListener('click', function(){
+      var spots = loadList('ffSpots');
+      var key = state.location.name + '@' + state.location.lat.toFixed(3);
+      if(!spots.some(function(s){ return s.key === key; })){
+        spots.push({key:key, location:state.location, water:state.water, species:state.species, method:state.method});
+        saveList('ffSpots', spots);
+      }
+      saveBtn.textContent = 'Saved ✓';
+      saveBtn.disabled = true;
+    });
+    logBtn.addEventListener('click', function(){
+      var form = document.getElementById('tripForm');
+      form.style.display = form.style.display === 'none' ? 'block' : 'none';
+    });
+    document.getElementById('tripSaveBtn').addEventListener('click', function(){
+      var entries = loadList('ffJournal');
+      entries.unshift({
+        date: new Date().toISOString().slice(0, 10),
+        name: state.location.name,
+        species: state.species,
+        fly: rec.primary,
+        note: document.getElementById('tripNote').value.trim()
+      });
+      saveList('ffJournal', entries.slice(0, 200));
+      document.getElementById('tripForm').innerHTML = '<p class="ff-spark-cap">Logged. Tight lines.</p>';
+    });
+  }
+
+  function showMySpots(){
+    var status = document.getElementById('searchStatus');
+    var results = document.getElementById('searchResults');
+    results.innerHTML = '';
+    var spots = loadList('ffSpots');
+    var journal = loadList('ffJournal');
+    status.textContent = spots.length ? 'Your saved spots:' : 'No saved spots yet — save one from a result page.';
+    spots.forEach(function(s, idx){
+      var btn = document.createElement('button');
+      btn.className = 'ff-result-item';
+      var info = speciesInfo[s.species];
+      btn.innerHTML = '<span class="rn">' + s.location.name + '</span><span class="rd">' +
+        (info ? info.label + ' · ' : '') + (s.location.region || '') + ' · <u>remove</u></span>';
+      btn.addEventListener('click', function(ev){
+        if(ev.target.tagName === 'U'){
+          spots.splice(idx, 1);
+          saveList('ffSpots', spots);
+          showMySpots();
+          return;
+        }
+        state.location = s.location;
+        state.notes = findWaterNotes(s.location.name, s.location.state);
+        state.water = s.water;
+        state.species = s.species;
+        state.method = s.method;
+        renderSpeciesOptions();
+        fetchWeather(s.location.lat, s.location.lon, document.getElementById('locateStatus')).catch(function(){});
+        if(s.location.country === 'United States'){
+          fetchGauge(s.location.lat, s.location.lon);
+        }
+        fetchAccess(s.location.lat, s.location.lon);
+        if(s.water === 'ocean'){
+          fetchTides(s.location.lat, s.location.lon);
+        }
+        goToStep(4);
+      });
+      results.appendChild(btn);
+    });
+    if(journal.length){
+      var head = document.createElement('p');
+      head.className = 'ff-search-status';
+      head.textContent = 'Trip log:';
+      results.appendChild(head);
+      journal.slice(0, 15).forEach(function(e){
+        var div = document.createElement('div');
+        div.className = 'ff-result-item';
+        div.style.cursor = 'default';
+        div.innerHTML = '<span class="rn">' + e.date + ' — ' + e.name + '</span><span class="rd">' +
+          e.fly + (e.note ? ' · ' + e.note : '') + '</span>';
+        results.appendChild(div);
+      });
+    }
+  }
+
+  function sparklineSvg(vals){
+    if(!vals || vals.length < 2) return '';
+    var min = Math.min.apply(null, vals);
+    var max = Math.max.apply(null, vals);
+    var span = (max - min) || 1;
+    var pts = vals.map(function(v, i){
+      var x = (i / (vals.length - 1)) * 200;
+      var y = 38 - ((v - min) / span) * 34;
+      return x.toFixed(1) + ',' + y.toFixed(1);
+    }).join(' ');
+    return '<svg class="ff-spark" viewBox="0 0 200 40" preserveAspectRatio="none" aria-label="7-day flow history">' +
+      '<polyline points="' + pts + '" fill="none" stroke="#56684A" stroke-width="1.5"/></svg>' +
+      '<p class="ff-spark-cap">Last 7 days · range ' + Math.round(min) + '–' + Math.round(max) + ' cfs</p>';
   }
 
   function renderMap(){
@@ -2121,6 +2410,12 @@
   }
 
   document.getElementById('exploreBtn').addEventListener('click', openExplore);
+  document.getElementById('mySpotsBtn').addEventListener('click', showMySpots);
+  function updateMySpotsBtn(){
+    var has = loadList('ffSpots').length || loadList('ffJournal').length;
+    document.getElementById('mySpotsBtn').style.display = has ? '' : 'none';
+  }
+  updateMySpotsBtn();
   document.getElementById('exploreClose').addEventListener('click', function(){
     document.getElementById('exploreOverlay').classList.remove('open');
   });
