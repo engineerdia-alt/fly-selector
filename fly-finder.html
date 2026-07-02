@@ -402,6 +402,20 @@
     margin:0 0 14px;
     line-height:1.4;
   }
+  .ff-card-alts{
+    margin-top:14px;
+    padding-top:12px;
+    border-top:1px solid rgba(0,0,0,0.08);
+  }
+  .ff-alt-item{
+    font-size:13px;
+    color:var(--ink);
+    margin:4px 0 0;
+    line-height:1.5;
+  }
+  .ff-alt-item a{
+    color:var(--moss);
+  }
   .ff-restart{
     font-family:'IBM Plex Mono',monospace;
     font-size:12px;
@@ -463,12 +477,7 @@
 
   <div class="ff-step" data-step="2">
     <p class="ff-q">What are you after?</p>
-    <div class="ff-options">
-      <button class="ff-opt" data-field="species" data-value="bass"><span class="ff-opt-label">Bass</span><span class="ff-opt-hint">smallmouth or largemouth</span></button>
-      <button class="ff-opt" data-field="species" data-value="pike"><span class="ff-opt-label">Pike or musky</span><span class="ff-opt-hint">toothy predators</span></button>
-      <button class="ff-opt" data-field="species" data-value="panfish"><span class="ff-opt-label">Panfish</span><span class="ff-opt-hint">bluegill, crappie</span></button>
-      <button class="ff-opt" data-field="species" data-value="trout"><span class="ff-opt-label">Trout</span><span class="ff-opt-hint">stream or stocked</span></button>
-    </div>
+    <div class="ff-options" id="speciesOptions"></div>
     <button class="ff-back" data-back="1">&larr; back</button>
   </div>
 
@@ -524,6 +533,7 @@
     </div>
 
     <p class="ff-locate-status" id="gaugeStatus"></p>
+    <p class="ff-locate-status" id="tideStatus"></p>
 
     <div>
       <button class="ff-continue" id="continueBtn" type="button">Show my recommendation</button>
@@ -539,8 +549,42 @@
 
 <script>
 (function(){
-  var state = {location:null, gauge:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
+  var state = {location:null, gauge:null, tide:null, bestWindow:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
   var currentStep = 0;
+
+  var speciesInfo = {
+    trout:     {label:'Trout', hint:'stream or stocked'},
+    bass:      {label:'Bass', hint:'smallmouth or largemouth'},
+    pike:      {label:'Pike or musky', hint:'toothy predators'},
+    panfish:   {label:'Panfish', hint:'bluegill, crappie'},
+    carp:      {label:'Carp', hint:'sight-fished bruisers'},
+    steelhead: {label:'Steelhead & salmon', hint:'migratory chrome'},
+    striper:   {label:'Striped bass', hint:'surf, rips, estuaries'},
+    bluefish:  {label:'Bluefish', hint:'choppers on bait'},
+    albie:     {label:'False albacore & bonito', hint:'speedsters on small bait'},
+    redfish:   {label:'Redfish & sea trout', hint:'flats and marsh'}
+  };
+  var speciesByWater = {
+    river: ['trout', 'bass', 'steelhead', 'pike', 'panfish', 'carp'],
+    lake:  ['bass', 'pike', 'panfish', 'trout', 'carp'],
+    pond:  ['bass', 'panfish', 'carp'],
+    ocean: ['striper', 'bluefish', 'albie', 'redfish']
+  };
+
+  function renderSpeciesOptions(){
+    var wrap = document.getElementById('speciesOptions');
+    wrap.innerHTML = '';
+    (speciesByWater[state.water] || speciesByWater.river).forEach(function(key){
+      var info = speciesInfo[key];
+      var btn = document.createElement('button');
+      btn.className = 'ff-opt';
+      btn.dataset.field = 'species';
+      btn.dataset.value = key;
+      btn.innerHTML = '<span class="ff-opt-label">' + info.label + '</span><span class="ff-opt-hint">' + info.hint + '</span>';
+      btn.addEventListener('click', function(){ onOptClick(btn); });
+      wrap.appendChild(btn);
+    });
+  }
 
   function goToStep(idx){
     document.querySelectorAll('.ff-step').forEach(function(s){
@@ -601,10 +645,46 @@
     }
   }
 
+  function computeBestWindow(hourly){
+    if(!hourly || !hourly.time) return null;
+    var now = new Date();
+    var best = null;
+    for(var i = 0; i < hourly.time.length - 1; i++){
+      if(new Date(hourly.time[i]) <= now) continue;
+      var score = 0;
+      for(var j = i; j <= i + 1; j++){
+        var h = new Date(hourly.time[j]).getHours();
+        // dawn and dusk are the feeding windows; dead of night scores nothing
+        if(h >= 5 && h < 9) score += 2;
+        else if(h >= 18 && h < 22) score += 2;
+        else if(h >= 22 || h < 5) score -= 2;
+        if(hourly.cloud_cover[j] > 60) score += 1;
+        var w = hourly.wind_speed_10m[j];
+        if(w < 8) score += 1; else if(w > 15) score -= 1;
+      }
+      if(!best || score > best.score) best = {score: score, i: i};
+    }
+    if(!best) return null;
+    var start = new Date(hourly.time[best.i]);
+    var end = new Date(hourly.time[best.i + 1]);
+    end.setHours(end.getHours() + 1);
+    var startH = start.getHours();
+    var why = [];
+    if(startH >= 5 && startH < 9) why.push('first light');
+    else if(startH >= 18 && startH < 22) why.push('fading light');
+    if(hourly.cloud_cover[best.i] > 60) why.push('cloud cover');
+    var wind = Math.round((hourly.wind_speed_10m[best.i] + hourly.wind_speed_10m[best.i + 1]) / 2);
+    why.push('wind around ' + wind + ' mph');
+    return fmtTime(start) + ' to ' + fmtTime(end) + ' — ' + why.join(', ') + '.';
+  }
+
   function fetchWeather(lat, lon, statusEl){
     var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon +
-      '&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover&temperature_unit=fahrenheit&wind_speed_unit=mph';
+      '&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover' +
+      '&hourly=temperature_2m,wind_speed_10m,cloud_cover&forecast_days=1&timezone=auto' +
+      '&temperature_unit=fahrenheit&wind_speed_unit=mph';
     return fetch(url).then(function(r){ return r.json(); }).then(function(data){
+      state.bestWindow = computeBestWindow(data.hourly);
       applyWeather(data, statusEl);
     });
   }
@@ -717,23 +797,102 @@
   }
 
   var GEOAPIFY_KEY = '714aba9f92134abdb5840cba44fda0dd';
+  function fmtTime(d){
+    return d ? d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) : null;
+  }
+
+  function renderTideStatus(){
+    var t = state.tide;
+    var el = document.getElementById('tideStatus');
+    if(!t || !el) return;
+    var bits = [];
+    if(t.direction) bits.push('Tide is ' + t.direction);
+    if(t.nextHigh) bits.push('next high ' + fmtTime(t.nextHigh));
+    if(t.nextLow) bits.push('next low ' + fmtTime(t.nextLow));
+    el.textContent = bits.join(' · ') + '.';
+  }
+
+  function fetchTides(lat, lon){
+    state.tide = null;
+    var el = document.getElementById('tideStatus');
+    if(el) el.textContent = '';
+    var url = 'https://marine-api.open-meteo.com/v1/marine?latitude=' + lat + '&longitude=' + lon +
+      '&hourly=sea_level_height_msl&timezone=auto&forecast_days=2';
+    fetch(url).then(function(r){ return r.json(); }).then(function(data){
+      var times = data.hourly && data.hourly.time;
+      var hs = data.hourly && data.hourly.sea_level_height_msl;
+      if(!times || !hs) return;
+      var now = new Date();
+      var nextHigh = null, nextLow = null, idxNow = 0;
+      for(var j = 0; j < times.length - 1; j++){
+        if(new Date(times[j]) <= now) idxNow = j;
+      }
+      for(var i = 1; i < hs.length - 1; i++){
+        if(hs[i] == null || hs[i-1] == null || hs[i+1] == null) continue;
+        var when = new Date(times[i]);
+        if(when <= now) continue;
+        if(!nextHigh && hs[i] >= hs[i-1] && hs[i] > hs[i+1]) nextHigh = when;
+        if(!nextLow && hs[i] <= hs[i-1] && hs[i] < hs[i+1]) nextLow = when;
+        if(nextHigh && nextLow) break;
+      }
+      if(!nextHigh && !nextLow) return;
+      var dir = null;
+      if(hs[idxNow] != null && hs[idxNow + 1] != null){
+        dir = hs[idxNow + 1] > hs[idxNow] ? 'rising' : 'falling';
+      }
+      state.tide = {nextHigh: nextHigh, nextLow: nextLow, direction: dir};
+      renderTideStatus();
+    }).catch(function(){});
+  }
+
+  function moonPhase(){
+    var synodic = 29.53058867;
+    var knownNewMoon = Date.UTC(2000, 0, 6, 18, 14);
+    var days = (Date.now() - knownNewMoon) / 86400000;
+    var age = ((days % synodic) + synodic) % synodic;
+    var illum = Math.round((1 - Math.cos(2 * Math.PI * age / synodic)) / 2 * 100);
+    var name;
+    if(age < 1.85) name = 'New moon';
+    else if(age < 5.54) name = 'Waxing crescent';
+    else if(age < 9.23) name = 'First quarter';
+    else if(age < 12.92) name = 'Waxing gibbous';
+    else if(age < 16.61) name = 'Full moon';
+    else if(age < 20.30) name = 'Waning gibbous';
+    else if(age < 23.99) name = 'Last quarter';
+    else if(age < 27.68) name = 'Waning crescent';
+    else name = 'New moon';
+    return {age: age, illum: illum, name: name};
+  }
+
   var featureLabels = {city:'City', town:'Town', village:'Village', county:'County', state:'State / region', country:'Country', street:'Street', building:'Building', amenity:'Place', natural:'Natural feature', postcode:'Postcode'};
 
-  document.getElementById('searchBtn').addEventListener('click', doSearch);
+  document.getElementById('searchBtn').addEventListener('click', function(){ doSearch(false); });
   document.getElementById('searchInput').addEventListener('keydown', function(e){
-    if(e.key === 'Enter') doSearch();
+    if(e.key === 'Enter') doSearch(false);
   });
 
-  function doSearch(){
+  var typeTimer = null, lastQuery = '', searchSeq = 0;
+  document.getElementById('searchInput').addEventListener('input', function(){
+    var q = this.value.trim();
+    clearTimeout(typeTimer);
+    if(q.length < 3 || q === lastQuery) return;
+    typeTimer = setTimeout(function(){ doSearch(true); }, 350);
+  });
+
+  function doSearch(auto){
     var q = document.getElementById('searchInput').value.trim();
     var status = document.getElementById('searchStatus');
     var results = document.getElementById('searchResults');
+    if(auto && q === lastQuery) return;
+    lastQuery = q;
     results.innerHTML = '';
-    if(!q){ status.textContent = 'Type a name to search.'; return; }
+    if(!q){ status.textContent = auto ? '' : 'Type a name to search.'; return; }
     status.textContent = 'Searching...';
+    var reqId = ++searchSeq;
     fetch('https://api.geoapify.com/v1/geocode/autocomplete?text=' + encodeURIComponent(q) + '&limit=6&format=json&apiKey=' + GEOAPIFY_KEY)
       .then(function(r){ return r.json(); })
       .then(function(data){
+        if(reqId !== searchSeq) return;
         if(!data.results || !data.results.length){
           status.textContent = 'No matches found. Try a different spelling, or skip and set it up manually.';
           return;
@@ -770,28 +929,32 @@
 
   document.querySelectorAll('.ff-opt').forEach(function(btn){
     btn.addEventListener('click', function(){
-      var field = btn.dataset.field;
-      var value = btn.dataset.value;
-      state[field] = value;
-      document.querySelectorAll('.ff-opt[data-field="'+field+'"]').forEach(function(b){
-        b.classList.toggle('selected', b === btn);
-      });
-      setTimeout(function(){
-        if(field === 'water'){
-          if(value === 'ocean'){
-            state.species = 'saltwater';
-            goToStep(3);
-          } else {
-            goToStep(2);
-          }
-        } else if(field === 'species'){
-          goToStep(3);
-        } else if(field === 'method'){
-          goToStep(4);
-        }
-      }, 150);
+      onOptClick(btn);
     });
   });
+
+  function onOptClick(btn){
+    var field = btn.dataset.field;
+    var value = btn.dataset.value;
+    state[field] = value;
+    document.querySelectorAll('.ff-opt[data-field="'+field+'"]').forEach(function(b){
+      b.classList.toggle('selected', b === btn);
+    });
+    setTimeout(function(){
+      if(field === 'water'){
+        state.species = null;
+        renderSpeciesOptions();
+        if(value === 'ocean' && state.location){
+          fetchTides(state.location.lat, state.location.lon);
+        }
+        goToStep(2);
+      } else if(field === 'species'){
+        goToStep(3);
+      } else if(field === 'method'){
+        goToStep(4);
+      }
+    }, 150);
+  }
 
   document.querySelectorAll('.ff-chip').forEach(function(btn){
     btn.addEventListener('click', function(){
@@ -819,7 +982,7 @@
   });
 
   document.getElementById('methodBack').addEventListener('click', function(){
-    goToStep(state.water === 'ocean' ? 1 : 2);
+    goToStep(2);
   });
 
   document.getElementById('continueBtn').addEventListener('click', function(){
@@ -832,10 +995,11 @@
   });
 
   document.getElementById('restartBtn').addEventListener('click', function(){
-    state = {location:null, gauge:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
+    state = {location:null, gauge:null, tide:null, bestWindow:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
     document.querySelectorAll('.ff-opt, .ff-chip, .ff-dir').forEach(function(b){ b.classList.remove('selected'); });
     document.getElementById('locateStatus').textContent = '';
     document.getElementById('gaugeStatus').textContent = '';
+    document.getElementById('tideStatus').textContent = '';
     document.getElementById('searchStatus').textContent = '';
     document.getElementById('searchResults').innerHTML = '';
     document.getElementById('searchInput').value = '';
@@ -855,6 +1019,9 @@
         status.textContent = 'Couldn\'t reach the weather service. Set conditions manually below.';
       });
       fetchGauge(pos.coords.latitude, pos.coords.longitude);
+      if(state.water === 'ocean'){
+        fetchTides(pos.coords.latitude, pos.coords.longitude);
+      }
     }, function(){
       status.textContent = 'Location access was denied. Set conditions manually below.';
     });
@@ -866,7 +1033,7 @@
 
   function recommendFly(){
     var s = state.species, t = state.temp, sky = state.sky;
-    var primary, color, reasoning, term, secondaryLabel, secondaryUrl, lineType;
+    var primary, color, reasoning, term, secondaryLabel, secondaryUrl, lineType, alternates;
 
     if(s === 'bass'){
       if(t === 'warm' || sky === 'bright'){
@@ -888,6 +1055,10 @@
         reasoning = 'Moderate conditions call for a streamer that covers mid depth water fast while still reading as a natural baitfish.';
         lineType = 'floating or clear intermediate line for mid-depth coverage';
       }
+      alternates = [
+        {name:'Crayfish pattern', term:'crayfish fly', color:'rust/brown'},
+        {name:'Game Changer', term:'game changer fly', color:'white or perch'}
+      ];
       secondaryLabel = 'Shop top bass flies \u2197';
       secondaryUrl = 'https://flyfishinguniverse.com/collections/top-bass-flies';
     } else if(s === 'pike'){
@@ -896,6 +1067,10 @@
       color = 'chartreuse/white or red/white';
       reasoning = 'Pike key on big, flashy profiles and aggressive movement, which helps them find the fly even in stained or wind-chopped water.';
       lineType = 'floating or intermediate line depending on how deep pike are holding';
+      alternates = [
+        {name:'Dahlberg Diver', term:'dahlberg diver', color:'yellow or fire tiger'},
+        {name:'Double Bunny', term:'double bunny fly', color:'white or black'}
+      ];
       secondaryLabel = 'Browse all streamers \u2197';
       secondaryUrl = shopUrl('streamer');
     } else if(s === 'panfish'){
@@ -906,8 +1081,99 @@
         ? 'Panfish move shallow to feed in low light, and a small popper gets noticed without spooking them.'
         : 'A small, slow subsurface pattern keeps things simple for panfish and stays effective across most conditions.';
       lineType = 'floating line';
+      alternates = [
+        {name:'Foam Spider', term:'foam spider fly', color:'black'},
+        {name:'Copper John, small', term:'copper john', color:'copper or red'}
+      ];
       secondaryLabel = 'Browse all flies \u2197';
       secondaryUrl = shopUrl('panfish');
+    } else if(s === 'carp'){
+      primary = 'Weighted carp nymph or crab';
+      term = 'carp fly';
+      color = 'rust or olive';
+      reasoning = 'Carp feed head-down on the bottom, so a weighted, buggy fly dropped softly in front of a cruising or tailing fish gets eaten far more often than anything stripped past it.';
+      lineType = 'floating line with a long leader for quiet presentations';
+      alternates = [
+        {name:'Backstabber Leech', term:'backstabber leech', color:'black or rust'},
+        {name:'San Juan Worm', term:'san juan worm', color:'red'}
+      ];
+      secondaryLabel = 'Browse all flies \u2197';
+      secondaryUrl = shopUrl('carp');
+    } else if(s === 'steelhead'){
+      if(t === 'cold'){
+        primary = 'Egg pattern under an indicator';
+        term = 'egg fly';
+        color = 'peach or chartreuse';
+        reasoning = 'Cold-water steelhead hold in slower runs and eat small drifted food. An egg dead-drifted at their level is the highest-percentage play.';
+        lineType = 'floating line with an indicator, or a sink-tip for swinging';
+      } else {
+        primary = 'Intruder-style streamer';
+        term = 'intruder fly';
+        color = 'black/blue in stained water, pink or orange in clear';
+        reasoning = 'In moderate temps migratory fish will chase \u2014 a swung intruder covers a whole run efficiently and triggers aggressive grabs.';
+        lineType = 'sink-tip or Skagit head for swinging flies';
+      }
+      alternates = [
+        {name:'Egg-Sucking Leech', term:'egg sucking leech', color:'black/pink'},
+        {name:'Stonefly Nymph', term:'stonefly nymph', color:'black or golden'}
+      ];
+      secondaryLabel = 'Browse all flies \u2197';
+      secondaryUrl = shopUrl('steelhead');
+    } else if(s === 'striper'){
+      if(sky === 'lowlight'){
+        primary = 'Black Deceiver or eel pattern';
+        term = 'deceiver fly';
+        color = 'black or purple, for a strong silhouette';
+        reasoning = 'Stripers push bait shallow in low light, and a dark profile silhouettes against the night sky better than any natural color.';
+      } else {
+        primary = 'Clouser Minnow';
+        term = 'clouser minnow';
+        color = 'chartreuse/white or olive/white';
+        reasoning = 'A Clouser gets down in the current, jigs on the strip, and reads as whatever bait is around \u2014 the most reliable daytime striper fly there is.';
+      }
+      lineType = 'intermediate line for surf and rips, floating for flats and estuaries';
+      alternates = [
+        {name:'Sand Eel pattern', term:'sand eel fly', color:'olive/white'},
+        {name:'Gurgler', term:'gurgler fly', color:'white'}
+      ];
+      secondaryLabel = 'Browse all flies \u2197';
+      secondaryUrl = shopUrl('striper');
+    } else if(s === 'bluefish'){
+      primary = 'Popper or Gurgler';
+      term = 'saltwater popper';
+      color = 'white or chartreuse \u2014 durability matters more than color';
+      reasoning = 'Bluefish blitz bait on the surface and shred flies, so a simple, durable topwater keeps the takes visual and survives more fish.';
+      lineType = 'floating or intermediate line, always with a wire bite tippet';
+      alternates = [
+        {name:'Deceiver', term:'deceiver fly', color:'blue/white'},
+        {name:'Surf Candy', term:'surf candy fly', color:'silver'}
+      ];
+      secondaryLabel = 'Browse all flies \u2197';
+      secondaryUrl = shopUrl('bluefish');
+    } else if(s === 'albie'){
+      primary = 'Surf Candy / epoxy minnow';
+      term = 'surf candy fly';
+      color = 'olive or tan over white, sized to the bait';
+      reasoning = 'Albies and bonito key on small bait and refuse anything oversized \u2014 a slim epoxy minnow matched to the bait is the difference between follows and eats.';
+      lineType = 'intermediate line with a long fluorocarbon leader';
+      alternates = [
+        {name:'Clouser Minnow, small', term:'clouser minnow', color:'tan/white'},
+        {name:'Gummy Minnow', term:'gummy minnow', color:'silver'}
+      ];
+      secondaryLabel = 'Browse all flies \u2197';
+      secondaryUrl = shopUrl('albacore');
+    } else if(s === 'redfish'){
+      primary = 'Crab or shrimp pattern';
+      term = 'redfish crab fly';
+      color = 'tan or olive, matched to the bottom';
+      reasoning = 'Redfish tail on crustaceans in skinny water \u2014 a lightly weighted crab dropped ahead of a working fish and twitched once is the classic shot.';
+      lineType = 'floating line for the flats and marsh';
+      alternates = [
+        {name:'Spoon fly', term:'spoon fly', color:'gold'},
+        {name:'EP Baitfish', term:'ep baitfish fly', color:'tan/white'}
+      ];
+      secondaryLabel = 'Browse all flies \u2197';
+      secondaryUrl = shopUrl('redfish');
     } else if(s === 'saltwater'){
       if(sky === 'lowlight'){
         primary = 'Dark profile streamer';
@@ -926,6 +1192,10 @@
         reasoning = 'A general purpose baitfish pattern that gets down and covers water efficiently in average conditions.';
       }
       lineType = 'floating or intermediate saltwater taper depending on depth';
+      alternates = [
+        {name:'Deceiver', term:'deceiver fly', color:'white/chartreuse'},
+        {name:'Gurgler', term:'gurgler fly', color:'white'}
+      ];
       secondaryLabel = 'Browse all flies \u2197';
       secondaryUrl = shopUrl('saltwater');
     } else {
@@ -934,6 +1204,10 @@
       color = t === 'cold' ? 'black or olive' : 'olive or brown';
       reasoning = 'A searching streamer pattern covers water fast when there is no specific hatch to match, which works well across most trout water.';
       lineType = 'floating line';
+      alternates = [
+        {name:'Pheasant Tail Nymph', term:'pheasant tail nymph', color:'natural'},
+        {name:'Parachute Adams', term:'parachute adams', color:'gray'}
+      ];
       secondaryLabel = 'Browse all flies \u2197';
       secondaryUrl = shopUrl('trout');
     }
@@ -945,7 +1219,7 @@
       reasoning += ' Flow is dropping and the water is likely clearing — lean smaller and more natural, with a longer, lighter leader.';
     }
 
-    return {primary:primary, term:term, color:color, reasoning:reasoning, lineType:lineType, secondaryLabel:secondaryLabel, secondaryUrl:secondaryUrl};
+    return {primary:primary, term:term, color:color, reasoning:reasoning, lineType:lineType, alternates:alternates, secondaryLabel:secondaryLabel, secondaryUrl:secondaryUrl};
   }
 
   function seasonalForage(){
@@ -977,6 +1251,42 @@
         summer: 'Early and late in the day tend to bring fish shallow, with dragonfly and damselfly patterns often effective.',
         fall: 'Fish typically feed up on baitfish and insects before slowing down for winter.'
       },
+      carp: {
+        winter: 'Carp go mostly dormant in cold water — look for the warmest, slowest water around and expect slow fishing.',
+        spring: 'Pre-spawn carp cruise warming shallows and feed confidently — some of the best sight-fishing of the year.',
+        summer: 'Tailing and mudding fish in the shallows early and late; midday sun makes them spooky but easier to spot.',
+        fall: 'Carp feed steadily on nymphs and crayfish ahead of winter, often in slightly deeper water than summer.'
+      },
+      steelhead: {
+        winter: 'Winter-run fish hold in slow, deep runs and rarely move far for a fly — get it down and dead-drift.',
+        spring: 'Spring runs and drop-back fish feed more actively as water warms — swing or nymph the travel lanes.',
+        summer: 'Where summer runs exist, fish low light and cooler tributary mouths; warm water sends fish deep.',
+        fall: 'Fall-run fish are aggressive and chase swung flies — often the best window of the year.'
+      },
+      striper: {
+        winter: 'Most fish winter over in deep holes and estuaries — slow presentations near bottom for holdovers.',
+        spring: 'The spring migration follows herring and bunker inshore — big flies near bait schools.',
+        summer: 'Dawn, dusk, and night fishing shine; midday fish slide deep or into current-swept rips.',
+        fall: 'The fall run is the event of the year — blitzing fish on migrating bait, often within casting range of shore.'
+      },
+      bluefish: {
+        winter: 'Bluefish move south or offshore in winter — few around in most areas.',
+        spring: 'Arriving schools chase bait inshore — fast strips and durable flies.',
+        summer: 'Blitzes can pop up any time bait gets pinned — watch for birds and surface commotion.',
+        fall: 'Feeding peaks alongside the striper run as bait floods out of the estuaries.'
+      },
+      albie: {
+        winter: 'Albies and bonito are offshore or south — the inshore window is closed in most areas.',
+        spring: 'Bonito often show first in early summer; albies are still scarce in most spots.',
+        summer: 'Late summer brings the first reliable inshore shots, especially around bait schools and rips.',
+        fall: 'Prime time — albies blitz bay anchovies and silversides within range of boats and jetties.'
+      },
+      redfish: {
+        winter: 'Clear, cold water pushes reds into deeper holes and mud flats that hold warmth — slow everything down.',
+        spring: 'Warming flats bring tailing fish back shallow, feeding on crabs and shrimp.',
+        summer: 'Early and late are best on the flats; big schools work the marsh edges on moving tides.',
+        fall: 'Bull reds school up and feed hard — the best big-fish window of the year in most areas.'
+      },
       saltwater: {
         winter: 'Baitfish tend to move to deeper, slower water, and fish follow, feeding less aggressively.',
         spring: 'Migratory baitfish schools typically return inshore, and predator activity picks up with them.',
@@ -984,7 +1294,7 @@
         fall: 'Often the peak baitfish migration of the year, with aggressive, sustained feeding activity.'
       }
     };
-    return table[s][season];
+    return (table[s] || table.saltwater)[season];
   }
 
   function methodTip(){
@@ -1031,6 +1341,42 @@
         line: rec.lineType,
         tippet: state.temp === 'cold' ? '5X\u20136X fluorocarbon' : '4X\u20135X fluorocarbon'
       },
+      carp: {
+        rod: '7 to 8-weight rod, 9ft',
+        reel: 'Smooth drag with plenty of backing \u2014 carp run far',
+        line: rec.lineType,
+        tippet: '10\u201312lb fluorocarbon'
+      },
+      steelhead: {
+        rod: '7 to 8-weight, 9\u00bd\u201311ft single-hand or switch rod',
+        reel: 'Large-arbor reel with a strong, smooth drag',
+        line: rec.lineType,
+        tippet: '8\u201312lb fluorocarbon'
+      },
+      striper: {
+        rod: windy ? '10-weight rod, 9ft' : '9-weight rod, 9ft',
+        reel: 'Sealed saltwater reel with a strong drag',
+        line: rec.lineType,
+        tippet: '16\u201320lb fluorocarbon'
+      },
+      bluefish: {
+        rod: '9 to 10-weight rod, 9ft',
+        reel: 'Sealed saltwater reel \u2014 blues will test it',
+        line: rec.lineType,
+        tippet: '30\u201340lb wire bite tippet ahead of 20lb class tippet'
+      },
+      albie: {
+        rod: '9-weight rod, 9ft with a fast action for wind and distance',
+        reel: 'Sealed saltwater reel with 200+ yards of backing',
+        line: rec.lineType,
+        tippet: '12\u201316lb fluorocarbon on a long leader'
+      },
+      redfish: {
+        rod: windy ? '9-weight rod, 9ft' : '8-weight rod, 9ft',
+        reel: 'Sealed saltwater reel with a smooth drag',
+        line: rec.lineType,
+        tippet: '12\u201316lb fluorocarbon'
+      },
       saltwater: {
         rod: windy ? '9 to 10-weight rod, 9ft' : '8 to 9-weight rod, 9ft',
         reel: 'Sealed saltwater reel with a strong, smooth drag',
@@ -1038,7 +1384,7 @@
         tippet: '16\u201320lb fluorocarbon'
       }
     };
-    return gear[s];
+    return gear[s] || gear.saltwater;
   }
 
   function renderResult(){
@@ -1061,7 +1407,44 @@
     html += '<div class="ff-card-actions">';
     html += '<a class="ff-btn ff-btn-primary" href="' + shopUrl(rec.term) + '" target="_top">Shop this fly \u2197</a>';
     html += '<a class="ff-btn ff-btn-secondary" href="' + rec.secondaryUrl + '" target="_top">' + rec.secondaryLabel + '</a>';
-    html += '</div></div>';
+    html += '</div>';
+    if(rec.alternates && rec.alternates.length){
+      html += '<div class="ff-card-alts"><p class="ff-info-label">Also worth carrying</p>';
+      rec.alternates.forEach(function(a){
+        html += '<p class="ff-alt-item">' + a.name + ' — ' + a.color + ' · <a href="' + shopUrl(a.term) + '" target="_top">shop ↗</a></p>';
+      });
+      html += '</div>';
+    }
+    html += '</div>';
+
+    if(state.water === 'ocean' && state.tide){
+      var tide = state.tide;
+      var tideBody = tide.direction ? 'Tide is ' + tide.direction + ' right now. ' : '';
+      var tideParts = [];
+      if(tide.nextHigh) tideParts.push('next high ' + fmtTime(tide.nextHigh));
+      if(tide.nextLow) tideParts.push('next low ' + fmtTime(tide.nextLow));
+      tideBody += tideParts.join(', ').replace(/^n/, 'N') + '. Moving water around the tide change usually fishes best — dead slack is the slowest window.';
+      html += '<div class="ff-info-card"><p class="ff-info-label">Tide</p><p class="ff-info-body">' + tideBody + '</p></div>';
+    }
+
+    var moon = moonPhase();
+    var moonBody = moon.name + ', ' + moon.illum + '% lit. ';
+    if(moon.name === 'Full moon' || moon.name === 'New moon'){
+      moonBody += state.water === 'ocean'
+        ? 'Spring tides — bigger water movement and stronger feeding windows around the tide changes.'
+        : 'Fish often feed at night around the ' + moon.name.toLowerCase() + ', which can slow the midday bite — favor dawn and dusk.';
+    } else if(moon.name === 'First quarter' || moon.name === 'Last quarter'){
+      moonBody += state.water === 'ocean'
+        ? 'Neap tides — milder water movement, so structure and bait matter more than the tide itself.'
+        : 'Moderate moon influence — time of day and weather matter more than the moon right now.';
+    } else {
+      moonBody += 'Moon influence is modest — lean on light, weather, and water conditions.';
+    }
+    html += '<div class="ff-info-card"><p class="ff-info-label">Moon</p><p class="ff-info-body">' + moonBody + '</p></div>';
+
+    if(state.bestWindow){
+      html += '<div class="ff-info-card"><p class="ff-info-label">Best window today</p><p class="ff-info-body">' + state.bestWindow + '</p></div>';
+    }
 
     if(state.gauge && state.gauge.flow != null){
       var g = state.gauge;
@@ -1095,7 +1478,41 @@
     html += '</dl></div>';
 
     box.innerHTML = html;
+
+    try{
+      localStorage.setItem('ffLast', JSON.stringify({location: state.location, water: state.water, species: state.species, method: state.method}));
+    }catch(e){}
   }
+
+  (function initLastSetup(){
+    var saved = null;
+    try{ saved = JSON.parse(localStorage.getItem('ffLast') || 'null'); }catch(e){}
+    if(!saved || !saved.location || !saved.water || !saved.species || !saved.method) return;
+    var btn = document.createElement('button');
+    btn.className = 'ff-skip';
+    btn.type = 'button';
+    btn.textContent = 'Same spot as last time: ' + saved.location.name + ' →';
+    btn.addEventListener('click', function(){
+      state.location = saved.location;
+      state.water = saved.water;
+      state.species = saved.species;
+      state.method = saved.method;
+      renderSpeciesOptions();
+      document.querySelectorAll('.ff-opt').forEach(function(b){
+        var f = b.dataset.field;
+        b.classList.toggle('selected', f && state[f] === b.dataset.value);
+      });
+      fetchWeather(saved.location.lat, saved.location.lon, document.getElementById('locateStatus')).catch(function(){});
+      if(saved.location.country === 'United States'){
+        fetchGauge(saved.location.lat, saved.location.lon);
+      }
+      if(saved.water === 'ocean'){
+        fetchTides(saved.location.lat, saved.location.lon);
+      }
+      goToStep(4);
+    });
+    document.querySelector('.ff-step[data-step="0"]').appendChild(btn);
+  })();
 })();
 </script>
 </body>
