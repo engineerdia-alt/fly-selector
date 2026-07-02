@@ -970,7 +970,12 @@
   var GEOAPIFY_KEY = '714aba9f92134abdb5840cba44fda0dd';
   // Cloudflare Worker that refines species/notes per exact river section
   // (see worker/README.md). Leave empty to disable the AI features.
-  var REFINE_URL = 'https://api.flyfishingfinder.com';
+  // primary is the branded domain; workers.dev fallback covers networks
+  // that quarantine newly-registered domains
+  var REFINE_URLS = [
+    'https://api.flyfishingfinder.com',
+    'https://fly-refine.flyfishingfinder.workers.dev'
+  ];
 
   // rough IP-based location so search results rank nearby waters first
   var ipBias = null;
@@ -1545,22 +1550,30 @@
   // exact section; refine the species list and stash the AI read
   function refineLocation(water){
     state.aiRefine = null;
-    if(!REFINE_URL || !state.location || state.location.lat == null) return;
+    if(!REFINE_URLS.length || !state.location || state.location.lat == null) return;
     var loc = state.location;
-    fetch(REFINE_URL, {
-      method: 'POST',
-      headers: {'Content-Type': 'application/json'},
-      body: JSON.stringify({
-        name: loc.name, state: loc.state, lat: loc.lat, lon: loc.lon,
-        water: water, candidates: speciesByWater[water] || []
-      })
-    }).then(function(r){ return r.json(); }).then(function(d){
-      if(!d || !d.species || !d.species.length) return;
-      if(loc !== state.location) return; // user moved on to another spot
-      state.aiRefine = d;
-      if(currentStep === 2) renderSpeciesOptions();
-      refreshResult();
-    }).catch(function(){});
+    var payload = JSON.stringify({
+      name: loc.name, state: loc.state, lat: loc.lat, lon: loc.lon,
+      water: water, candidates: speciesByWater[water] || []
+    });
+    function attempt(idx){
+      if(idx >= REFINE_URLS.length) return;
+      fetch(REFINE_URLS[idx], {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: payload
+      }).then(function(r){
+        if(!r.ok) throw new Error('bad status');
+        return r.json();
+      }).then(function(d){
+        if(!d || !d.species || !d.species.length) return;
+        if(loc !== state.location) return; // user moved on to another spot
+        state.aiRefine = d;
+        if(currentStep === 2) renderSpeciesOptions();
+        refreshResult();
+      }).catch(function(){ attempt(idx + 1); });
+    }
+    attempt(0);
   }
 
   // guess the water type from the name so we can skip the obvious question
