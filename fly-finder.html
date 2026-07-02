@@ -405,7 +405,10 @@
   .ff-card-alts{
     margin-top:14px;
     padding-top:12px;
-    border-top:1px solid rgba(0,0,0,0.08);
+    border-top:1px solid rgba(242,236,221,0.2);
+  }
+  .ff-card-alts .ff-info-label{
+    color:var(--brass);
   }
   .ff-alt-item{
     font-size:13px;
@@ -413,8 +416,15 @@
     margin:4px 0 0;
     line-height:1.5;
   }
-  .ff-alt-item a{
+  .ff-card .ff-alt-item{
+    color:#E4DFCE;
+  }
+  .ff-alt-item a,
+  .ff-info-body a{
     color:var(--moss);
+  }
+  .ff-card .ff-alt-item a{
+    color:var(--brass);
   }
   .ff-restart{
     font-family:'IBM Plex Mono',monospace;
@@ -549,7 +559,7 @@
 
 <script>
 (function(){
-  var state = {location:null, gauge:null, tide:null, bestWindow:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
+  var state = {location:null, gauge:null, tide:null, bestWindow:null, access:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
   var currentStep = 0;
 
   var speciesInfo = {
@@ -845,6 +855,34 @@
     }).catch(function(){});
   }
 
+  function fetchAccess(lat, lon){
+    state.access = null;
+    var q = '[out:json][timeout:20];(nwr["leisure"="slipway"](around:8000,' + lat + ',' + lon + ');' +
+            'nwr["leisure"="fishing"](around:8000,' + lat + ',' + lon + '););out center tags 40;';
+    fetch('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q))
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if(!data.elements || !data.elements.length) return;
+        var spots = data.elements.map(function(e){
+          var elat = e.lat != null ? e.lat : (e.center && e.center.lat);
+          var elon = e.lon != null ? e.lon : (e.center && e.center.lon);
+          if(elat == null) return null;
+          var t = e.tags || {};
+          return {
+            name: t.name || null,
+            kind: t.leisure === 'slipway' ? 'Boat launch' : 'Fishing access',
+            lat: elat, lon: elon,
+            dist: haversineMi(lat, lon, elat, elon)
+          };
+        }).filter(Boolean);
+        if(!spots.length) return;
+        spots.sort(function(a, b){
+          return (a.name ? 0 : 1) - (b.name ? 0 : 1) || a.dist - b.dist;
+        });
+        state.access = spots.slice(0, 5);
+      }).catch(function(){});
+  }
+
   function moonPhase(){
     var synodic = 29.53058867;
     var knownNewMoon = Date.UTC(2000, 0, 6, 18, 14);
@@ -906,7 +944,7 @@
           var region = [r.city || r.county, r.state, r.country].filter(Boolean).join(', ');
           btn.innerHTML = '<span class="rn">' + name + '</span><span class="rd">' + label + (region ? ' \u00b7 ' + region : '') + '</span>';
           btn.addEventListener('click', function(){
-            state.location = {name:name, region:region, lat:r.lat, lon:r.lon, country:r.country};
+            state.location = {name:name, region:region, state:r.state, lat:r.lat, lon:r.lon, country:r.country};
             status.textContent = 'Loading conditions for ' + name + '...';
             fetchWeather(r.lat, r.lon, document.getElementById('locateStatus')).then(function(){
               status.textContent = 'Set: ' + name;
@@ -914,6 +952,7 @@
             if(r.country === 'United States'){
               fetchGauge(r.lat, r.lon);
             }
+            fetchAccess(r.lat, r.lon);
             goToStep(1);
           });
           results.appendChild(btn);
@@ -995,7 +1034,7 @@
   });
 
   document.getElementById('restartBtn').addEventListener('click', function(){
-    state = {location:null, gauge:null, tide:null, bestWindow:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
+    state = {location:null, gauge:null, tide:null, bestWindow:null, access:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
     document.querySelectorAll('.ff-opt, .ff-chip, .ff-dir').forEach(function(b){ b.classList.remove('selected'); });
     document.getElementById('locateStatus').textContent = '';
     document.getElementById('gaugeStatus').textContent = '';
@@ -1019,6 +1058,7 @@
         status.textContent = 'Couldn\'t reach the weather service. Set conditions manually below.';
       });
       fetchGauge(pos.coords.latitude, pos.coords.longitude);
+      fetchAccess(pos.coords.latitude, pos.coords.longitude);
       if(state.water === 'ocean'){
         fetchTides(pos.coords.latitude, pos.coords.longitude);
       }
@@ -1461,7 +1501,22 @@
       if(g.waterTempF != null){
         flowBody += ' Water temp at the gauge: ' + g.waterTempF + '°F.';
       }
+      flowBody += ' <a href="https://waterdata.usgs.gov/monitoring-location/' + g.code + '" target="_blank" rel="noopener">Live gauge &amp; graphs ↗</a>';
       html += '<div class="ff-info-card"><p class="ff-info-label">River flow (USGS, ' + g.dist.toFixed(1) + ' mi away)</p><p class="ff-info-body">' + flowBody + '</p></div>';
+    }
+
+    if(state.access && state.access.length){
+      var accHtml = '';
+      state.access.forEach(function(a){
+        var label = a.name || ('Unnamed ' + a.kind.toLowerCase());
+        accHtml += '<p class="ff-alt-item">' + label + ' — ' + a.kind + ', ' + a.dist.toFixed(1) + ' mi · <a href="https://www.google.com/maps?q=' + a.lat + ',' + a.lon + '" target="_blank" rel="noopener">map ↗</a></p>';
+      });
+      html += '<div class="ff-info-card"><p class="ff-info-label">Access points nearby</p>' + accHtml + '</div>';
+    }
+
+    if(state.location && state.location.state && state.location.country === 'United States'){
+      var st = state.location.state;
+      html += '<div class="ff-info-card"><p class="ff-info-label">Know before you go</p><p class="ff-info-body">Make sure your ' + st + ' fishing license is current before you head out, and check local regulations for the water you\'re fishing — seasons, size limits, and special gear rules vary. <a href="https://www.google.com/search?q=' + encodeURIComponent(st + ' fishing license regulations') + '" target="_blank" rel="noopener">Check ' + st + ' rules ↗</a></p></div>';
     }
 
     html += '<div class="ff-info-card"><p class="ff-info-label">What to expect this time of year</p><p class="ff-info-body">' + forage + '</p></div>';
@@ -1506,6 +1561,7 @@
       if(saved.location.country === 'United States'){
         fetchGauge(saved.location.lat, saved.location.lon);
       }
+      fetchAccess(saved.location.lat, saved.location.lon);
       if(saved.water === 'ocean'){
         fetchTides(saved.location.lat, saved.location.lon);
       }
