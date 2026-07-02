@@ -1,0 +1,981 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Fly Finder — Fly Fishing Universe</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --river:#16302B;
+    --river-light:#22463D;
+    --parchment:#F2ECDD;
+    --parchment-dim:#E7DFC9;
+    --brass:#B58A4A;
+    --brass-dark:#8C6A38;
+    --rust:#A9512E;
+    --moss:#56684A;
+    --ink:#1C231F;
+    --ink-soft:#4B5750;
+  }
+  *{box-sizing:border-box;}
+  body{margin:0;}
+  .ff-app{
+    background:var(--parchment);
+    color:var(--ink);
+    font-family:'Inter',sans-serif;
+    max-width:640px;
+    margin:0 auto;
+    padding:40px 28px 56px;
+  }
+  .ff-eyebrow{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--brass-dark);
+    margin:0 0 10px;
+  }
+  .ff-h1{
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    font-size:29px;
+    line-height:1.15;
+    margin:0 0 10px;
+    color:var(--river);
+  }
+  .ff-sub{
+    font-size:15px;
+    line-height:1.55;
+    color:var(--ink-soft);
+    margin:0 0 30px;
+    max-width:46ch;
+  }
+  .ff-leader{
+    display:flex;
+    align-items:center;
+    gap:0;
+    margin-bottom:32px;
+  }
+  .ff-leader-seg{
+    flex:1;
+    height:2px;
+    background:var(--parchment-dim);
+  }
+  .ff-leader-seg.done{background:var(--brass);}
+  .ff-fly-marker{
+    width:16px;height:16px;
+    border-radius:50%;
+    background:var(--river);
+    border:2px solid var(--brass);
+    flex:0 0 auto;
+    transition:background .2s ease;
+  }
+  .ff-fly-marker.active{background:var(--rust);}
+  .ff-step{display:none;}
+  .ff-step.active{display:block;}
+  .ff-q{
+    font-family:'Fraunces',serif;
+    font-weight:500;
+    font-size:19px;
+    color:var(--river);
+    margin:0 0 18px;
+  }
+  .ff-options{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+    margin-bottom:8px;
+  }
+  .ff-opt{
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    font-weight:500;
+    color:var(--ink);
+    background:var(--parchment);
+    border:1px solid var(--parchment-dim);
+    border-radius:2px;
+    padding:16px 14px;
+    text-align:left;
+    cursor:pointer;
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .ff-opt:hover{border-color:var(--brass);background:#EFE7D2;}
+  .ff-opt.selected{
+    border-color:var(--rust);
+    background:var(--river);
+    color:var(--parchment);
+  }
+  .ff-opt-label{display:block;}
+  .ff-opt-hint{
+    display:block;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--ink-soft);
+    margin-top:4px;
+  }
+  .ff-opt.selected .ff-opt-hint{color:var(--parchment-dim);}
+  .ff-back{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    background:none;
+    border:none;
+    cursor:pointer;
+    padding:4px 0;
+    margin-top:6px;
+    text-decoration:underline;
+  }
+  .ff-search-row{
+    display:flex;
+    gap:8px;
+    margin-bottom:10px;
+  }
+  .ff-search-input{
+    flex:1;
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    padding:12px 14px;
+    border:1px solid var(--parchment-dim);
+    border-radius:2px;
+    background:#fff;
+    color:var(--ink);
+  }
+  .ff-search-input:focus{outline:none;border-color:var(--brass);}
+  .ff-search-btn{
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+    font-weight:600;
+    color:var(--parchment);
+    background:var(--river);
+    border:none;
+    border-radius:2px;
+    padding:0 18px;
+    cursor:pointer;
+  }
+  .ff-search-btn:hover{background:var(--river-light);}
+  .ff-search-status{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    margin:0 0 14px;
+    min-height:16px;
+  }
+  .ff-result-list{margin-bottom:14px;}
+  .ff-result-item{
+    display:block;
+    width:100%;
+    text-align:left;
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    color:var(--ink);
+    background:#fff;
+    border:1px solid var(--parchment-dim);
+    border-radius:2px;
+    padding:12px 14px;
+    margin-bottom:8px;
+    cursor:pointer;
+  }
+  .ff-result-item:hover{border-color:var(--brass);}
+  .ff-result-item .rn{font-weight:600;}
+  .ff-result-item .rd{
+    display:block;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--ink-soft);
+    margin-top:2px;
+  }
+  .ff-skip{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    background:none;
+    border:none;
+    cursor:pointer;
+    text-decoration:underline;
+    padding:0;
+  }
+  .ff-locate-btn{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+    font-weight:600;
+    color:var(--parchment);
+    background:var(--river);
+    border:none;
+    border-radius:2px;
+    padding:12px 16px;
+    cursor:pointer;
+    margin-bottom:10px;
+  }
+  .ff-locate-btn:hover{background:var(--river-light);}
+  .ff-locate-status{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    margin:0 0 22px;
+    min-height:16px;
+  }
+  .ff-subq{
+    font-family:'Inter',sans-serif;
+    font-weight:600;
+    font-size:13px;
+    color:var(--ink);
+    margin:20px 0 10px;
+  }
+  .ff-row-opts{
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin-bottom:6px;
+  }
+  .ff-chip{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    font-weight:500;
+    color:var(--ink);
+    background:var(--parchment);
+    border:1px solid var(--parchment-dim);
+    border-radius:2px;
+    padding:8px 12px;
+    cursor:pointer;
+  }
+  .ff-chip:hover{border-color:var(--brass);}
+  .ff-chip.selected{
+    background:var(--rust);
+    border-color:var(--rust);
+    color:var(--parchment);
+  }
+  .ff-compass{
+    position:relative;
+    width:150px;
+    height:150px;
+    margin:6px 0 22px;
+  }
+  .ff-compass-ring{
+    position:absolute;
+    inset:0;
+    border:1px dashed var(--parchment-dim);
+    border-radius:50%;
+  }
+  .ff-compass-center{
+    position:absolute;
+    top:50%;left:50%;
+    width:6px;height:6px;
+    background:var(--brass);
+    border-radius:50%;
+    transform:translate(-50%,-50%);
+  }
+  .ff-dir{
+    position:absolute;
+    width:28px;height:28px;
+    border-radius:50%;
+    background:var(--parchment);
+    border:1px solid var(--parchment-dim);
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    font-weight:500;
+    color:var(--ink);
+    display:flex;align-items:center;justify-content:center;
+    cursor:pointer;
+  }
+  .ff-dir:hover{border-color:var(--brass);}
+  .ff-dir.selected{background:var(--rust);border-color:var(--rust);color:var(--parchment);}
+  .ff-continue{
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    font-weight:600;
+    color:var(--parchment);
+    background:var(--rust);
+    border:none;
+    border-radius:2px;
+    padding:13px 22px;
+    cursor:pointer;
+    margin-top:8px;
+  }
+  .ff-result{
+    border-top:1px solid var(--parchment-dim);
+    padding-top:28px;
+  }
+  .ff-result-tag{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.06em;
+    text-transform:uppercase;
+    color:var(--rust);
+    margin:0 0 8px;
+  }
+  .ff-location-tag{
+    font-family:'Fraunces',serif;
+    font-size:15px;
+    color:var(--river);
+    margin:0 0 18px;
+  }
+  .ff-card{
+    background:var(--river);
+    color:var(--parchment);
+    border-radius:2px;
+    padding:24px 22px;
+    margin-bottom:14px;
+  }
+  .ff-card-fly{
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    font-size:22px;
+    margin:0 0 4px;
+  }
+  .ff-card-color{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:#C9BE9C;
+    margin:0 0 14px;
+  }
+  .ff-card-why{
+    font-size:14px;
+    line-height:1.6;
+    color:#E4DFCE;
+    margin:0 0 20px;
+  }
+  .ff-card-actions{
+    display:flex;
+    gap:10px;
+    flex-wrap:wrap;
+  }
+  .ff-btn{
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+    font-weight:600;
+    text-decoration:none;
+    padding:11px 18px;
+    border-radius:2px;
+    display:inline-block;
+  }
+  .ff-btn-primary{
+    background:var(--brass);
+    color:var(--ink);
+  }
+  .ff-btn-secondary{
+    background:transparent;
+    color:var(--parchment);
+    border:1px solid #4F6960;
+  }
+  .ff-info-card{
+    background:var(--parchment-dim);
+    border-radius:2px;
+    padding:18px 20px;
+    margin-bottom:12px;
+  }
+  .ff-info-label{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    letter-spacing:0.05em;
+    text-transform:uppercase;
+    color:var(--moss);
+    margin:0 0 8px;
+  }
+  .ff-info-body{
+    font-size:14px;
+    line-height:1.6;
+    color:var(--ink);
+    margin:0;
+  }
+  .ff-gear-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:10px;
+  }
+  .ff-gear-item dt{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--moss);
+    margin:0 0 3px;
+  }
+  .ff-gear-item dd{
+    font-size:13px;
+    color:var(--ink);
+    margin:0 0 14px;
+    line-height:1.4;
+  }
+  .ff-restart{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--ink-soft);
+    background:none;
+    border:none;
+    cursor:pointer;
+    text-decoration:underline;
+    padding:0;
+  }
+  @media (max-width:420px){
+    .ff-options{grid-template-columns:1fr;}
+    .ff-gear-grid{grid-template-columns:1fr;}
+    .ff-h1{font-size:23px;}
+  }
+</style>
+</head>
+<body>
+<div class="ff-app">
+  <p class="ff-eyebrow">Fly finder</p>
+  <h1 class="ff-h1">What's the water doing today?</h1>
+  <p class="ff-sub">Search any river, lake, or stretch of coast, or set conditions manually, and we'll tell you what to tie on, what to expect, and what gear to bring.</p>
+
+  <div class="ff-leader" id="leader">
+    <div class="ff-fly-marker active" data-idx="0"></div>
+    <div class="ff-leader-seg" data-idx="0"></div>
+    <div class="ff-fly-marker" data-idx="1"></div>
+    <div class="ff-leader-seg" data-idx="1"></div>
+    <div class="ff-fly-marker" data-idx="2"></div>
+    <div class="ff-leader-seg" data-idx="2"></div>
+    <div class="ff-fly-marker" data-idx="3"></div>
+    <div class="ff-leader-seg" data-idx="3"></div>
+    <div class="ff-fly-marker" data-idx="4"></div>
+    <div class="ff-leader-seg" data-idx="4"></div>
+    <div class="ff-fly-marker" data-idx="5"></div>
+  </div>
+
+  <div class="ff-step active" data-step="0">
+    <p class="ff-q">Search for your water</p>
+    <div class="ff-search-row">
+      <input class="ff-search-input" id="searchInput" type="text" placeholder="e.g. Huron River, Belleville Lake, Cape Cod">
+      <button class="ff-search-btn" id="searchBtn" type="button">Search</button>
+    </div>
+    <p class="ff-search-status" id="searchStatus"></p>
+    <div class="ff-result-list" id="searchResults"></div>
+    <button class="ff-skip" id="skipSearch" type="button">Skip, I'll set it up manually &rarr;</button>
+  </div>
+
+  <div class="ff-step" data-step="1">
+    <p class="ff-q">Where are you fishing?</p>
+    <div class="ff-options">
+      <button class="ff-opt" data-field="water" data-value="river"><span class="ff-opt-label">Moving river</span><span class="ff-opt-hint">current, riffles, runs</span></button>
+      <button class="ff-opt" data-field="water" data-value="lake"><span class="ff-opt-label">Lake or reservoir</span><span class="ff-opt-hint">still or slow water</span></button>
+      <button class="ff-opt" data-field="water" data-value="pond"><span class="ff-opt-label">Pond</span><span class="ff-opt-hint">small, shallow, calm</span></button>
+      <button class="ff-opt" data-field="water" data-value="ocean"><span class="ff-opt-label">Ocean or bay</span><span class="ff-opt-hint">saltwater, flats, surf</span></button>
+    </div>
+    <button class="ff-back" data-back="0">&larr; back</button>
+  </div>
+
+  <div class="ff-step" data-step="2">
+    <p class="ff-q">What are you after?</p>
+    <div class="ff-options">
+      <button class="ff-opt" data-field="species" data-value="bass"><span class="ff-opt-label">Bass</span><span class="ff-opt-hint">smallmouth or largemouth</span></button>
+      <button class="ff-opt" data-field="species" data-value="pike"><span class="ff-opt-label">Pike or musky</span><span class="ff-opt-hint">toothy predators</span></button>
+      <button class="ff-opt" data-field="species" data-value="panfish"><span class="ff-opt-label">Panfish</span><span class="ff-opt-hint">bluegill, crappie</span></button>
+      <button class="ff-opt" data-field="species" data-value="trout"><span class="ff-opt-label">Trout</span><span class="ff-opt-hint">stream or stocked</span></button>
+    </div>
+    <button class="ff-back" data-back="1">&larr; back</button>
+  </div>
+
+  <div class="ff-step" data-step="3">
+    <p class="ff-q">How are you fishing it?</p>
+    <div class="ff-options">
+      <button class="ff-opt" data-field="method" data-value="shore"><span class="ff-opt-label">From shore</span><span class="ff-opt-hint">bank or surf</span></button>
+      <button class="ff-opt" data-field="method" data-value="wading"><span class="ff-opt-label">Wading</span><span class="ff-opt-hint">in the water</span></button>
+      <button class="ff-opt" data-field="method" data-value="boat"><span class="ff-opt-label">Boat</span><span class="ff-opt-hint">powered or drift</span></button>
+      <button class="ff-opt" data-field="method" data-value="kayak"><span class="ff-opt-label">Kayak or float</span><span class="ff-opt-hint">paddle craft</span></button>
+    </div>
+    <button class="ff-back" id="methodBack" type="button">&larr; back</button>
+  </div>
+
+  <div class="ff-step" data-step="4">
+    <p class="ff-q">Conditions</p>
+    <button class="ff-locate-btn" id="locateBtn" type="button">Use my current location and weather</button>
+    <p class="ff-locate-status" id="locateStatus"></p>
+
+    <p class="ff-subq">Water temp</p>
+    <div class="ff-row-opts" data-group="temp">
+      <button class="ff-chip" data-field="temp" data-value="cold">Cold, under 60&deg;F</button>
+      <button class="ff-chip" data-field="temp" data-value="moderate">Moderate, 60&ndash;75&deg;F</button>
+      <button class="ff-chip" data-field="temp" data-value="warm">Warm, 75&deg;F+</button>
+    </div>
+
+    <p class="ff-subq">Sky</p>
+    <div class="ff-row-opts" data-group="sky">
+      <button class="ff-chip" data-field="sky" data-value="bright">Bright sun</button>
+      <button class="ff-chip" data-field="sky" data-value="overcast">Overcast</button>
+      <button class="ff-chip" data-field="sky" data-value="lowlight">Dawn or dusk</button>
+    </div>
+
+    <p class="ff-subq">Wind speed</p>
+    <div class="ff-row-opts" data-group="windSpeed">
+      <button class="ff-chip" data-field="windSpeed" data-value="calm">Calm</button>
+      <button class="ff-chip" data-field="windSpeed" data-value="breezy">Breezy</button>
+      <button class="ff-chip" data-field="windSpeed" data-value="windy">Windy</button>
+    </div>
+
+    <p class="ff-subq">Wind direction</p>
+    <div class="ff-compass" id="compass">
+      <div class="ff-compass-ring"></div>
+      <div class="ff-compass-center"></div>
+      <div class="ff-dir" data-field="windDir" data-value="N" style="top:6px;left:61px;">N</div>
+      <div class="ff-dir" data-field="windDir" data-value="NE" style="top:22px;left:100px;">NE</div>
+      <div class="ff-dir" data-field="windDir" data-value="E" style="top:61px;left:116px;">E</div>
+      <div class="ff-dir" data-field="windDir" data-value="SE" style="top:100px;left:100px;">SE</div>
+      <div class="ff-dir" data-field="windDir" data-value="S" style="top:116px;left:61px;">S</div>
+      <div class="ff-dir" data-field="windDir" data-value="SW" style="top:100px;left:22px;">SW</div>
+      <div class="ff-dir" data-field="windDir" data-value="W" style="top:61px;left:6px;">W</div>
+      <div class="ff-dir" data-field="windDir" data-value="NW" style="top:22px;left:22px;">NW</div>
+    </div>
+
+    <p class="ff-locate-status" id="gaugeStatus"></p>
+
+    <div>
+      <button class="ff-continue" id="continueBtn" type="button">Show my recommendation</button>
+    </div>
+    <button class="ff-back" data-back="3">&larr; back</button>
+  </div>
+
+  <div class="ff-step" data-step="5">
+    <div class="ff-result" id="resultBox"></div>
+    <button class="ff-restart" id="restartBtn">start over</button>
+  </div>
+</div>
+
+<script>
+(function(){
+  var state = {location:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
+  var currentStep = 0;
+
+  function goToStep(idx){
+    document.querySelectorAll('.ff-step').forEach(function(s){
+      s.classList.toggle('active', parseInt(s.dataset.step,10) === idx);
+    });
+    document.querySelectorAll('.ff-fly-marker').forEach(function(m){
+      m.classList.toggle('active', parseInt(m.dataset.idx,10) <= idx);
+    });
+    document.querySelectorAll('.ff-leader-seg').forEach(function(seg){
+      seg.classList.toggle('done', parseInt(seg.dataset.idx,10) < idx);
+    });
+    currentStep = idx;
+  }
+
+  function selectChip(field, value){
+    document.querySelectorAll('.ff-chip[data-field="'+field+'"], .ff-dir[data-field="'+field+'"]').forEach(function(b){
+      b.classList.toggle('selected', b.dataset.value === value);
+    });
+    state[field] = value;
+  }
+
+  function degToCompass(deg){
+    var dirs = ['N','NE','E','SE','S','SW','W','NW'];
+    return dirs[Math.round(deg / 45) % 8];
+  }
+
+  function applyWeather(data, statusEl){
+    var c = data.current;
+    var tempF = Math.round(c.temperature_2m);
+    var windMph = Math.round(c.wind_speed_10m);
+    var cloud = c.cloud_cover;
+    var hour = new Date().getHours();
+
+    var tempVal = tempF < 60 ? 'cold' : (tempF < 75 ? 'moderate' : 'warm');
+    var skyVal;
+    if(hour < 8 || hour >= 19){
+      skyVal = 'lowlight';
+    } else if(cloud > 60){
+      skyVal = 'overcast';
+    } else {
+      skyVal = 'bright';
+    }
+    var windSpeedVal = windMph < 5 ? 'calm' : (windMph < 15 ? 'breezy' : 'windy');
+    var windDirVal = degToCompass(c.wind_direction_10m);
+
+    selectChip('temp', tempVal);
+    selectChip('sky', skyVal);
+    selectChip('windSpeed', windSpeedVal);
+    selectChip('windDir', windDirVal);
+
+    if(statusEl){
+      statusEl.textContent = tempF + '\u00b0F, wind ' + windMph + ' mph from the ' + windDirVal + ', ' + cloud + '% cloud cover. Adjust below if this doesn\'t match what you see.';
+    }
+  }
+
+  function fetchWeather(lat, lon, statusEl){
+    var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon +
+      '&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover&temperature_unit=fahrenheit&wind_speed_unit=mph';
+    return fetch(url).then(function(r){ return r.json(); }).then(function(data){
+      applyWeather(data, statusEl);
+    });
+  }
+
+  function fetchGauge(lat, lon){
+    var d = 0.15;
+    var bbox = (lon-d) + ',' + (lat-d) + ',' + (lon+d) + ',' + (lat+d);
+    var url = 'https://waterservices.usgs.gov/nwis/iv/?format=json&bBox=' + bbox + '&parameterCd=00060&siteStatus=active';
+    var gaugeStatus = document.getElementById('gaugeStatus');
+    fetch(url).then(function(r){ return r.json(); }).then(function(data){
+      var series = data.value && data.value.timeSeries;
+      if(series && series.length){
+        var site = series[0];
+        var name = site.sourceInfo.siteName;
+        var vals = site.values[0].value;
+        if(vals && vals.length){
+          var flow = Math.round(parseFloat(vals[vals.length-1].value));
+          gaugeStatus.textContent = 'Nearby USGS gauge (' + name + '): ' + flow + ' cfs right now.';
+        }
+      }
+    }).catch(function(){});
+  }
+
+  var featureLabels = {STM:'River / stream', LK:'Lake', RSV:'Reservoir', BAY:'Bay', SEA:'Sea', GULF:'Gulf', CNL:'Canal', PND:'Pond'};
+
+  document.getElementById('searchBtn').addEventListener('click', doSearch);
+  document.getElementById('searchInput').addEventListener('keydown', function(e){
+    if(e.key === 'Enter') doSearch();
+  });
+
+  function doSearch(){
+    var q = document.getElementById('searchInput').value.trim();
+    var status = document.getElementById('searchStatus');
+    var results = document.getElementById('searchResults');
+    results.innerHTML = '';
+    if(!q){ status.textContent = 'Type a name to search.'; return; }
+    status.textContent = 'Searching...';
+    fetch('https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(q) + '&count=6&language=en&format=json')
+      .then(function(r){ return r.json(); })
+      .then(function(data){
+        if(!data.results || !data.results.length){
+          status.textContent = 'No matches found. Try a different spelling, or skip and set it up manually.';
+          return;
+        }
+        status.textContent = 'Pick the closest match:';
+        data.results.forEach(function(r){
+          var btn = document.createElement('button');
+          btn.className = 'ff-result-item';
+          var label = featureLabels[r.feature_code] || 'Place';
+          var region = [r.admin1, r.country].filter(Boolean).join(', ');
+          btn.innerHTML = '<span class="rn">' + r.name + '</span><span class="rd">' + label + (region ? ' \u00b7 ' + region : '') + '</span>';
+          btn.addEventListener('click', function(){
+            state.location = {name:r.name, region:region, lat:r.latitude, lon:r.longitude, country:r.country};
+            status.textContent = 'Loading conditions for ' + r.name + '...';
+            fetchWeather(r.latitude, r.longitude, document.getElementById('locateStatus')).then(function(){
+              status.textContent = 'Set: ' + r.name;
+            });
+            if(r.country === 'United States'){
+              fetchGauge(r.latitude, r.longitude);
+            }
+            goToStep(1);
+          });
+          results.appendChild(btn);
+        });
+      }).catch(function(){
+        status.textContent = 'Search failed. Try again, or skip and set it up manually.';
+      });
+  }
+
+  document.getElementById('skipSearch').addEventListener('click', function(){
+    goToStep(1);
+  });
+
+  document.querySelectorAll('.ff-opt').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var field = btn.dataset.field;
+      var value = btn.dataset.value;
+      state[field] = value;
+      document.querySelectorAll('.ff-opt[data-field="'+field+'"]').forEach(function(b){
+        b.classList.toggle('selected', b === btn);
+      });
+      setTimeout(function(){
+        if(field === 'water'){
+          if(value === 'ocean'){
+            state.species = 'saltwater';
+            goToStep(3);
+          } else {
+            goToStep(2);
+          }
+        } else if(field === 'species'){
+          goToStep(3);
+        } else if(field === 'method'){
+          goToStep(4);
+        }
+      }, 150);
+    });
+  });
+
+  document.querySelectorAll('.ff-chip').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var field = btn.dataset.field;
+      state[field] = btn.dataset.value;
+      document.querySelectorAll('.ff-chip[data-field="'+field+'"]').forEach(function(b){
+        b.classList.toggle('selected', b === btn);
+      });
+    });
+  });
+
+  document.querySelectorAll('.ff-dir').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      state.windDir = btn.dataset.value;
+      document.querySelectorAll('.ff-dir').forEach(function(b){
+        b.classList.toggle('selected', b === btn);
+      });
+    });
+  });
+
+  document.querySelectorAll('.ff-back[data-back]').forEach(function(btn){
+    btn.addEventListener('click', function(){
+      goToStep(parseInt(btn.dataset.back,10));
+    });
+  });
+
+  document.getElementById('methodBack').addEventListener('click', function(){
+    goToStep(state.water === 'ocean' ? 1 : 2);
+  });
+
+  document.getElementById('continueBtn').addEventListener('click', function(){
+    if(!state.temp || !state.sky || !state.windSpeed){
+      document.getElementById('locateStatus').textContent = 'Pick a water temp, sky, and wind speed first, or use auto-detect above.';
+      return;
+    }
+    renderResult();
+    goToStep(5);
+  });
+
+  document.getElementById('restartBtn').addEventListener('click', function(){
+    state = {location:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
+    document.querySelectorAll('.ff-opt, .ff-chip, .ff-dir').forEach(function(b){ b.classList.remove('selected'); });
+    document.getElementById('locateStatus').textContent = '';
+    document.getElementById('gaugeStatus').textContent = '';
+    document.getElementById('searchStatus').textContent = '';
+    document.getElementById('searchResults').innerHTML = '';
+    document.getElementById('searchInput').value = '';
+    goToStep(0);
+  });
+
+  document.getElementById('locateBtn').addEventListener('click', function(){
+    var status = document.getElementById('locateStatus');
+    if(!navigator.geolocation){
+      status.textContent = 'Location isn\'t available in this browser. Set conditions manually below.';
+      return;
+    }
+    status.textContent = 'Finding your location...';
+    navigator.geolocation.getCurrentPosition(function(pos){
+      status.textContent = 'Got your location, pulling current weather...';
+      fetchWeather(pos.coords.latitude, pos.coords.longitude, status).catch(function(){
+        status.textContent = 'Couldn\'t reach the weather service. Set conditions manually below.';
+      });
+    }, function(){
+      status.textContent = 'Location access was denied. Set conditions manually below.';
+    });
+  });
+
+  function shopUrl(term){
+    return 'https://flyfishinguniverse.com/search?type=product&q=' + encodeURIComponent(term);
+  }
+
+  function recommendFly(){
+    var s = state.species, t = state.temp, sky = state.sky;
+    var primary, color, reasoning, term, secondaryLabel, secondaryUrl, lineType;
+
+    if(s === 'bass'){
+      if(t === 'warm' || sky === 'bright'){
+        primary = 'Deep Leech Streamer, cone head';
+        term = 'leech streamer';
+        color = t === 'warm' ? 'crayfish red/brown' : 'midnight blue/black';
+        reasoning = 'Warm water and bright light push bass deep and tight to structure. A cone head leech sinks fast and stays in the strike zone longer than a lighter fly.';
+        lineType = 'intermediate or sink-tip line to get the leech down quickly';
+      } else if(sky === 'lowlight'){
+        primary = 'Popper or topwater bug';
+        term = 'popper';
+        color = 'black or white';
+        reasoning = 'Low light means bass are moving shallow to feed. Topwater draws reaction strikes without needing to nail the exact depth.';
+        lineType = 'floating line so the popper sits up and pops cleanly';
+      } else {
+        primary = 'Half and half streamer';
+        term = 'clouser streamer';
+        color = 'olive/white or chartreuse/white';
+        reasoning = 'Moderate conditions call for a streamer that covers mid depth water fast while still reading as a natural baitfish.';
+        lineType = 'floating or clear intermediate line for mid-depth coverage';
+      }
+      secondaryLabel = 'Shop top bass flies \u2197';
+      secondaryUrl = 'https://flyfishinguniverse.com/collections/top-bass-flies';
+    } else if(s === 'pike'){
+      primary = 'Large streamer or bucktail';
+      term = 'pike streamer';
+      color = 'chartreuse/white or red/white';
+      reasoning = 'Pike key on big, flashy profiles and aggressive movement, which helps them find the fly even in stained or wind-chopped water.';
+      lineType = 'floating or intermediate line depending on how deep pike are holding';
+      secondaryLabel = 'Browse all streamers \u2197';
+      secondaryUrl = shopUrl('streamer');
+    } else if(s === 'panfish'){
+      primary = sky === 'lowlight' ? 'Small popper' : 'Small Woolly Bugger';
+      term = sky === 'lowlight' ? 'panfish popper' : 'woolly bugger';
+      color = 'yellow or black';
+      reasoning = sky === 'lowlight'
+        ? 'Panfish move shallow to feed in low light, and a small popper gets noticed without spooking them.'
+        : 'A small, slow subsurface pattern keeps things simple for panfish and stays effective across most conditions.';
+      lineType = 'floating line';
+      secondaryLabel = 'Browse all flies \u2197';
+      secondaryUrl = shopUrl('panfish');
+    } else if(s === 'saltwater'){
+      if(sky === 'lowlight'){
+        primary = 'Dark profile streamer';
+        term = 'saltwater streamer';
+        color = 'black or purple, for a strong silhouette';
+        reasoning = 'In low light, a dark silhouette stands out against the sky better than a natural or light color.';
+      } else if(t === 'warm' || sky === 'bright'){
+        primary = 'Baitfish deceiver pattern';
+        term = 'deceiver fly';
+        color = 'white/chartreuse';
+        reasoning = 'Bright, clear conditions call for a natural baitfish profile that fish can key in on visually.';
+      } else {
+        primary = 'Clouser minnow';
+        term = 'clouser minnow';
+        color = 'olive/white';
+        reasoning = 'A general purpose baitfish pattern that gets down and covers water efficiently in average conditions.';
+      }
+      lineType = 'floating or intermediate saltwater taper depending on depth';
+      secondaryLabel = 'Browse all flies \u2197';
+      secondaryUrl = shopUrl('saltwater');
+    } else {
+      primary = 'Woolly Bugger';
+      term = 'woolly bugger';
+      color = t === 'cold' ? 'black or olive' : 'olive or brown';
+      reasoning = 'A searching streamer pattern covers water fast when there is no specific hatch to match, which works well across most trout water.';
+      lineType = 'floating line';
+      secondaryLabel = 'Browse all flies \u2197';
+      secondaryUrl = shopUrl('trout');
+    }
+
+    return {primary:primary, term:term, color:color, reasoning:reasoning, lineType:lineType, secondaryLabel:secondaryLabel, secondaryUrl:secondaryUrl};
+  }
+
+  function seasonalForage(){
+    var month = new Date().getMonth();
+    var season = (month <= 1 || month === 11) ? 'winter' : (month <= 4 ? 'spring' : (month <= 7 ? 'summer' : 'fall'));
+    var s = state.species;
+    var table = {
+      trout: {
+        winter: 'Midges are typically the main food source now, usually in small sizes. Fish slow and subsurface.',
+        spring: 'Blue-winged olives and early season stoneflies tend to be active, with fish keying on emerging insects.',
+        summer: 'Caddis activity and terrestrials, ants, hoppers, beetles, are usually the main forage this time of year.',
+        fall: 'Blue-winged olives often return in the fall, and fish tend to key more on baitfish as they feed up for winter.'
+      },
+      bass: {
+        winter: 'Metabolism slows down, so slow, subtle presentations near deep structure tend to work best.',
+        spring: 'Crayfish and baitfish activity picks up as fish move shallow to spawn and feed heavily afterward.',
+        summer: 'Dawn and dusk topwater activity is typically strongest, with fish holding deep and eating crayfish patterns midday.',
+        fall: 'Baitfish patterns tend to dominate as fish feed heavily ahead of winter.'
+      },
+      pike: {
+        winter: 'Pike slow down but still feed, usually on slower, larger presentations near deeper water.',
+        spring: 'Post-spawn pike feed aggressively on baitfish in the shallows.',
+        summer: 'Early morning and evening tend to be most active, with fish holding in weed edges and shade midday.',
+        fall: 'Pike often feed heavily on baitfish as water cools, one of the best windows of the year.'
+      },
+      panfish: {
+        winter: 'Panfish group up and hold deep, feeding slowly on small subsurface patterns.',
+        spring: 'Spawning activity in the shallows usually makes panfish aggressive and easy to target with small poppers.',
+        summer: 'Early and late in the day tend to bring fish shallow, with dragonfly and damselfly patterns often effective.',
+        fall: 'Fish typically feed up on baitfish and insects before slowing down for winter.'
+      },
+      saltwater: {
+        winter: 'Baitfish tend to move to deeper, slower water, and fish follow, feeding less aggressively.',
+        spring: 'Migratory baitfish schools typically return inshore, and predator activity picks up with them.',
+        summer: 'Dawn and dusk topwater activity around bait schools is often strongest, with fish deeper and less active midday.',
+        fall: 'Often the peak baitfish migration of the year, with aggressive, sustained feeding activity.'
+      }
+    };
+    return table[s][season];
+  }
+
+  function methodTip(){
+    var m = state.method;
+    var tips = {
+      shore: 'You have less water to cover than a boat angler, so make each cast count toward visible structure and cover near the bank.',
+      wading: 'Move slowly and fish the water in front of you before wading through it. Watch your footing near drop-offs.',
+      boat: 'Position upwind or up-current of your target so the fly and boat drift naturally toward the fish rather than away from it.',
+      kayak: 'Keep your profile low and casts compact. Let the wind or current help position you rather than fighting it.'
+    };
+    return tips[m];
+  }
+
+  function windTip(){
+    if(!state.windDir) return null;
+    return 'With wind out of the ' + state.windDir + ', the downwind bank tends to collect blown-in food and slightly warmer surface water. That side is often worth checking first.';
+  }
+
+  function gearFor(rec){
+    var s = state.species;
+    var windy = state.windSpeed === 'windy';
+    var gear = {
+      bass: {
+        rod: windy ? '8-weight rod, 9ft' : '7-weight rod, 9ft',
+        reel: 'Mid-arbor reel with a smooth drag',
+        line: rec.lineType,
+        tippet: '10\u201312lb fluorocarbon (0X\u20131X)'
+      },
+      pike: {
+        rod: '8 to 9-weight rod, 9ft',
+        reel: 'Sealed-drag reel rated for the rod weight',
+        line: rec.lineType,
+        tippet: '20\u201330lb wire or heavy fluorocarbon bite tippet ahead of 20lb class tippet'
+      },
+      panfish: {
+        rod: '3 to 5-weight rod, 8\u20139ft',
+        reel: 'Lightweight click-pawl or disc drag reel',
+        line: rec.lineType,
+        tippet: '5X fluorocarbon or mono'
+      },
+      trout: {
+        rod: windy ? '6-weight rod, 9ft' : '5-weight rod, 9ft',
+        reel: 'Standard trout reel with a light drag',
+        line: rec.lineType,
+        tippet: state.temp === 'cold' ? '5X\u20136X fluorocarbon' : '4X\u20135X fluorocarbon'
+      },
+      saltwater: {
+        rod: windy ? '9 to 10-weight rod, 9ft' : '8 to 9-weight rod, 9ft',
+        reel: 'Sealed saltwater reel with a strong, smooth drag',
+        line: rec.lineType,
+        tippet: '16\u201320lb fluorocarbon'
+      }
+    };
+    return gear[s];
+  }
+
+  function renderResult(){
+    var rec = recommendFly();
+    var gear = gearFor(rec);
+    var forage = seasonalForage();
+    var method = methodTip();
+    var wind = windTip();
+
+    var box = document.getElementById('resultBox');
+    var html = '';
+    html += '<p class="ff-result-tag">Your match</p>';
+    if(state.location){
+      html += '<p class="ff-location-tag">' + state.location.name + (state.location.region ? ', ' + state.location.region : '') + '</p>';
+    }
+    html += '<div class="ff-card">';
+    html += '<p class="ff-card-fly">' + rec.primary + '</p>';
+    html += '<p class="ff-card-color">Suggested color: ' + rec.color + '</p>';
+    html += '<p class="ff-card-why">' + rec.reasoning + '</p>';
+    html += '<div class="ff-card-actions">';
+    html += '<a class="ff-btn ff-btn-primary" href="' + shopUrl(rec.term) + '" target="_top">Shop this fly \u2197</a>';
+    html += '<a class="ff-btn ff-btn-secondary" href="' + rec.secondaryUrl + '" target="_top">' + rec.secondaryLabel + '</a>';
+    html += '</div></div>';
+
+    html += '<div class="ff-info-card"><p class="ff-info-label">What to expect this time of year</p><p class="ff-info-body">' + forage + '</p></div>';
+    html += '<div class="ff-info-card"><p class="ff-info-label">Working from ' + state.method + '</p><p class="ff-info-body">' + method + '</p></div>';
+    if(wind){
+      html += '<div class="ff-info-card"><p class="ff-info-label">Wind</p><p class="ff-info-body">' + wind + '</p></div>';
+    }
+
+    html += '<div class="ff-info-card"><p class="ff-info-label">Gear for today</p><dl class="ff-gear-grid">';
+    html += '<div class="ff-gear-item"><dt>Rod</dt><dd>' + gear.rod + '</dd></div>';
+    html += '<div class="ff-gear-item"><dt>Reel</dt><dd>' + gear.reel + '</dd></div>';
+    html += '<div class="ff-gear-item"><dt>Line</dt><dd>' + gear.line + '</dd></div>';
+    html += '<div class="ff-gear-item"><dt>Tippet</dt><dd>' + gear.tippet + '</dd></div>';
+    html += '</dl></div>';
+
+    box.innerHTML = html;
+  }
+})();
+</script>
+</body>
+</html>
