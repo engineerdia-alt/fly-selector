@@ -7,6 +7,8 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <style>
   :root{
     --river:#16302B;
@@ -402,6 +404,19 @@
     margin:0 0 14px;
     line-height:1.4;
   }
+  .ff-map{
+    height:340px;
+    border-radius:10px;
+    margin-top:10px;
+    z-index:0;
+  }
+  .ff-map-popup{
+    font-family:'Inter',sans-serif;
+    font-size:13px;
+  }
+  .ff-map-popup a{
+    color:var(--moss);
+  }
   .ff-card-alts{
     margin-top:14px;
     padding-top:12px;
@@ -561,6 +576,7 @@
 (function(){
   var state = {location:null, gauge:null, tide:null, bestWindow:null, access:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
   var currentStep = 0;
+  var resultMap = null;
 
   var speciesInfo = {
     trout:     {label:'Trout', hint:'stream or stocked'},
@@ -754,6 +770,8 @@
           sites[code] = {
             code: code,
             name: ts.sourceInfo.siteName,
+            lat: loc.latitude,
+            lon: loc.longitude,
             dist: haversineMi(lat, lon, loc.latitude, loc.longitude),
             flow: null,
             waterTempF: null
@@ -865,9 +883,25 @@
     }).catch(function(){});
   }
 
+  var OVERPASS_ENDPOINTS = [
+    'https://overpass-api.de/api/interpreter',
+    'https://maps.mail.ru/osm/tools/overpass/api/interpreter',
+    'https://overpass.kumi.systems/api/interpreter'
+  ];
+
+  function overpassFetch(q, idx){
+    idx = idx || 0;
+    if(idx >= OVERPASS_ENDPOINTS.length) return Promise.reject(new Error('overpass unavailable'));
+    return fetch(OVERPASS_ENDPOINTS[idx] + '?data=' + encodeURIComponent(q))
+      .then(function(r){
+        if(!r.ok) throw new Error('status ' + r.status);
+        return r.json();
+      })
+      .catch(function(){ return overpassFetch(q, idx + 1); });
+  }
+
   function overpassAccess(q, lat, lon, requireName){
-    return fetch('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q))
-      .then(function(r){ return r.json(); })
+    return overpassFetch(q)
       .then(function(data){
         var kinds = {slipway:'Boat / canoe launch', fishing:'Fishing access', park:'Park / river access', camp_site:'Campground'};
         var seen = {};
@@ -1606,6 +1640,10 @@
       html += '<div class="ff-info-card"><p class="ff-info-label">' + (state.accessAlong ? 'Access along the river' : 'Access points nearby') + '</p>' + accHtml + '</div>';
     }
 
+    if(state.location && window.L){
+      html += '<div class="ff-info-card"><p class="ff-info-label">Map</p><div id="resultMap" class="ff-map"></div></div>';
+    }
+
     if(state.location && state.location.state && state.location.country === 'United States'){
       var st = state.location.state;
       html += '<div class="ff-info-card"><p class="ff-info-label">Know before you go</p><p class="ff-info-body">Make sure your ' + st + ' fishing license is current before you head out, and check local regulations for the water you\'re fishing — seasons, size limits, and special gear rules vary. <a href="https://www.google.com/search?q=' + encodeURIComponent(st + ' fishing license regulations') + '" target="_blank" rel="noopener">Check ' + st + ' rules ↗</a></p></div>';
@@ -1625,10 +1663,59 @@
     html += '</dl></div>';
 
     box.innerHTML = html;
+    // wait until goToStep(5) has made the result step visible, otherwise
+    // Leaflet measures a display:none container and renders a blank map
+    setTimeout(renderMap, 60);
 
     try{
       localStorage.setItem('ffLast', JSON.stringify({location: state.location, water: state.water, species: state.species, method: state.method}));
     }catch(e){}
+  }
+
+  function renderMap(){
+    var el = document.getElementById('resultMap');
+    if(!el || !window.L || !state.location) return;
+    if(resultMap){
+      resultMap.remove();
+      resultMap = null;
+    }
+    resultMap = L.map(el);
+    L.tileLayer('https://maps.geoapify.com/v1/tile/osm-bright/{z}/{x}/{y}.png?apiKey=' + GEOAPIFY_KEY, {
+      attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://www.geoapify.com/">Geoapify</a>',
+      maxZoom: 19
+    }).addTo(resultMap);
+
+    var pts = [];
+    function popupHtml(title, sub, lat, lon){
+      return '<div class="ff-map-popup"><strong>' + title + '</strong>' + (sub ? '<br>' + sub : '') +
+        '<br><a href="https://www.google.com/maps?q=' + lat + ',' + lon + '" target="_blank" rel="noopener">Directions ↗</a></div>';
+    }
+
+    var loc = state.location;
+    var locMarker = L.circleMarker([loc.lat, loc.lon], {radius:9, color:'#16302B', fillColor:'#16302B', fillOpacity:0.9});
+    locMarker.bindPopup(popupHtml('Your spot: ' + loc.name, loc.region, loc.lat, loc.lon)).addTo(resultMap);
+    pts.push([loc.lat, loc.lon]);
+
+    (state.access || []).forEach(function(a){
+      var m = L.circleMarker([a.lat, a.lon], {radius:7, color:'#8C6A38', fillColor:'#B58A4A', fillOpacity:0.9});
+      m.bindPopup(popupHtml(a.name || a.kind, a.kind + ' · ' + a.dist.toFixed(1) + ' mi', a.lat, a.lon)).addTo(resultMap);
+      pts.push([a.lat, a.lon]);
+    });
+
+    var g = state.gauge;
+    if(g && g.lat != null){
+      var gm = L.circleMarker([g.lat, g.lon], {radius:7, color:'#A9512E', fillColor:'#A9512E', fillOpacity:0.9});
+      gm.bindPopup('<div class="ff-map-popup"><strong>USGS gauge</strong><br>' + g.name +
+        (g.flow != null ? '<br>' + Math.round(g.flow) + ' cfs' + (g.waterTempF != null ? ' · ' + g.waterTempF + '°F' : '') : '') +
+        '<br><a href="https://waterdata.usgs.gov/monitoring-location/' + g.code + '" target="_blank" rel="noopener">Live gauge ↗</a></div>').addTo(resultMap);
+      pts.push([g.lat, g.lon]);
+    }
+
+    if(pts.length > 1){
+      resultMap.fitBounds(pts, {padding:[30, 30], maxZoom: 13});
+    } else {
+      resultMap.setView(pts[0], 12);
+    }
   }
 
   (function initLastSetup(){
