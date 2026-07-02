@@ -1383,28 +1383,31 @@
           }
           idx++;
         }
-        // keep waters and fishing places; residential streets and buildings
-        // are noise, and towns become a "find waters near..." jump-off
-        var waterNameRe = /\b(river|creek|stream|brook|branch|fork|lake|pond|reservoir|bay|sound|gulf|ocean|sea|harbor|harbour|inlet|marsh|flats?|dam|launch|landing|access|ramp|marina|pier|jetty|beach|park|campground)\b/i;
-        var placeTypes = {city:1, town:1, village:1, suburb:1, county:1, municipality:1, state:1};
-        var dropTypes = {street:1, building:1, postcode:1};
-        var cityCandidate = null;
-        var waters = merged.filter(function(r){
-          var nm = r.name || r.address_line1 || r.city || r.formatted || '';
-          if(placeTypes[r.result_type]){
-            if(!cityCandidate) cityCandidate = r;
-            return false;
-          }
-          if(dropTypes[r.result_type]) return false;
-          return waterNameRe.test(nm);
-        });
-        merged = waters;
-        if(!merged.length && !cityCandidate){
+        var sp = splitWaters(merged);
+        if(!sp.waters.length && !sp.city){
+          // autocomplete misses named regions like "Cape Cod";
+          // the full-text search endpoint knows them — rescue query
+          fetch('https://api.geoapify.com/v1/geocode/search?text=' + encodeURIComponent(q) + '&limit=6&format=json' + (ipBias ? '&bias=proximity:' + ipBias : '') + '&apiKey=' + GEOAPIFY_KEY)
+            .then(function(r){ return r.json(); })
+            .then(function(d){
+              if(reqId !== searchSeq) return;
+              renderWaters(splitWaters(d.results || []));
+            }).catch(function(){
+              if(reqId === searchSeq) renderWaters(sp);
+            });
+          return;
+        }
+        renderWaters(sp);
+
+        function renderWaters(sp2){
+        var waters = sp2.waters;
+        var cityCandidate = sp2.city;
+        if(!waters.length && !cityCandidate){
           status.textContent = 'No waters found by that name. Try the river or lake name, or a nearby town.';
           return;
         }
-        status.textContent = merged.length ? 'Pick the closest match:' : 'That looks like a town, not a water:';
-        merged.forEach(function(r){
+        status.textContent = waters.length ? 'Pick the closest match:' : 'That looks like a town, not a water:';
+        waters.forEach(function(r){
           var btn = document.createElement('button');
           btn.className = 'ff-result-item';
           var name = r.name || r.address_line1 || r.city || r.formatted;
@@ -1437,11 +1440,32 @@
           });
           results.appendChild(cbtn);
         }
+        }
       }).catch(function(){
         if(reqId === searchSeq){
           status.textContent = 'Search failed. Try again, or skip and set it up manually.';
         }
       });
+  }
+
+  // keep waters and fishing places; residential streets and buildings
+  // are noise, and towns become a "find waters near..." jump-off
+  var waterNameRe = /\b(river|creek|stream|brook|branch|fork|lake|pond|reservoir|bay|sound|gulf|ocean|sea|harbor|harbour|inlet|marsh|flats?|dam|launch|landing|access|ramp|marina|pier|jetty|beach|cape|cove|point|island|isle|keys?|strait|channel|lagoon|estuary|bayou|slough|falls?|rapids?|springs?|narrows|shoals?|coast|shore|shoreline|surf|park|metroparks?|preserve|refuge|recreation|campground|forest)\b/i;
+
+  function splitWaters(list){
+    var placeTypes = {city:1, town:1, village:1, suburb:1, county:1, municipality:1, state:1};
+    var dropTypes = {street:1, building:1, postcode:1};
+    var out = {waters: [], city: null};
+    list.forEach(function(r){
+      var nm = r.name || r.address_line1 || r.city || r.formatted || '';
+      if(placeTypes[r.result_type]){
+        if(!out.city) out.city = r;
+        return;
+      }
+      if(dropTypes[r.result_type]) return;
+      if(waterNameRe.test(nm)) out.waters.push(r);
+    });
+    return out;
   }
 
   function nearbyWaters(lat, lon, label, stateName, country){
