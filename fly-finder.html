@@ -417,6 +417,58 @@
   .ff-map-popup a{
     color:var(--moss);
   }
+  .ff-popup-btn{
+    margin-top:6px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    background:var(--river);
+    color:var(--parchment);
+    border:none;
+    border-radius:6px;
+    padding:5px 10px;
+    cursor:pointer;
+  }
+  .ff-explore{
+    display:none;
+    position:fixed;
+    inset:0;
+    z-index:1000;
+    background:var(--parchment);
+  }
+  .ff-explore.open{display:block;}
+  #exploreMap{position:absolute;inset:0;}
+  .ff-explore-close{
+    position:absolute;
+    top:14px;
+    right:14px;
+    z-index:1001;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13px;
+    background:var(--river);
+    color:var(--parchment);
+    border:none;
+    border-radius:8px;
+    padding:9px 14px;
+    cursor:pointer;
+    box-shadow:0 2px 8px rgba(0,0,0,0.25);
+  }
+  .ff-explore-hint{
+    position:absolute;
+    bottom:18px;
+    left:50%;
+    transform:translateX(-50%);
+    z-index:1001;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--ink);
+    background:rgba(242,236,221,0.92);
+    border-radius:8px;
+    padding:7px 12px;
+    margin:0;
+    max-width:90%;
+    text-align:center;
+    box-shadow:0 2px 8px rgba(0,0,0,0.15);
+  }
   .ff-card-alts{
     margin-top:14px;
     padding-top:12px;
@@ -487,6 +539,7 @@
     <p class="ff-search-status" id="searchStatus"></p>
     <div class="ff-result-list" id="searchResults"></div>
     <button class="ff-skip" id="skipSearch" type="button">Skip, I'll set it up manually &rarr;</button>
+    <button class="ff-skip" id="exploreBtn" type="button">Explore the map &rarr;</button>
   </div>
 
   <div class="ff-step" data-step="1">
@@ -572,9 +625,15 @@
   </div>
 </div>
 
+<div class="ff-explore" id="exploreOverlay">
+  <div id="exploreMap"></div>
+  <button class="ff-explore-close" id="exploreClose" type="button">&#10005; close map</button>
+  <p class="ff-explore-hint" id="exploreHint">Rust dots are storied waters with local notes. Zoom in to load boat launches and fishing access anywhere.</p>
+</div>
+
 <script>
 (function(){
-  var state = {location:null, gauge:null, tide:null, bestWindow:null, access:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
+  var state = {location:null, notes:null, gauge:null, tide:null, bestWindow:null, access:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
   var currentStep = 0;
   var resultMap = null;
 
@@ -981,6 +1040,97 @@
     return {age: age, illum: illum, name: name};
   }
 
+  // Curated local knowledge for storied waters. General guidance from
+  // well-known angling lore — always tell users to verify current regs.
+  var WATER_NOTES = [
+    {name:'Au Sable River', state:'Michigan', lat:44.660, lon:-84.620, match:'au\\s*sable',
+     hook:'Michigan\'s most storied trout river and the birthplace of Trout Unlimited. Sandy, spring-fed, and wadeable, with brook and brown trout in the upper river.',
+     hatches:'Hendricksons late April–May, sulphurs and brown drakes in June, then the famous Hex hatch at night from late June into mid-July. Fall is streamer season for the biggest browns.',
+     regs:'The "Holy Water" from Burton\'s Landing to Wakeley Bridge is flies-only, catch-and-release.',
+     stretches:'Holy Water for numbers of fish, the South Branch through the Mason Tract for solitude, and below Mio dam for trophy browns.'},
+    {name:'Pere Marquette River', state:'Michigan', lat:43.900, lon:-85.850, match:'pere\\s*marquette',
+     hook:'A wild, undammed river with resident browns plus heavy runs of salmon in fall and steelhead through winter and spring.',
+     hatches:'Gray drakes and sulphurs May–June, hoppers in August. King salmon August–October; steelhead November through April.',
+     regs:'The flies-only, no-kill section runs from the M-37 bridge down to Gleason\'s Landing.',
+     stretches:'The Baldwin-area flies-only water wades well; the lower river fishes best from a drift boat.'},
+    {name:'Manistee River', state:'Michigan', lat:44.640, lon:-84.980, match:'manistee',
+     hook:'The Au Sable\'s quieter twin — classic sand-and-gravel brook and brown trout water in the upper river, big migratory fish below Tippy Dam.',
+     hatches:'A similar calendar to the Au Sable: drakes and Hex in the slower reaches late June–July, hoppers in August. Below Tippy: salmon in fall, steelhead November–April.',
+     regs:'Artificials-only with special size limits between M-72 and CCC Bridge on the upper river.',
+     stretches:'Yellow Trees Landing to CCC Bridge up top; Tippy Dam down to High Bridge for salmon and steelhead.'},
+    {name:'Muskegon River', state:'Michigan', lat:43.440, lon:-85.660, match:'muskegon',
+     hook:'A big, year-round tailwater below Croton Dam with browns, rainbows, and some of Michigan\'s heaviest steelhead and salmon runs.',
+     hatches:'Caddis and gray drakes May–June for residents; salmon September–October; steelhead November–April with the peak around the spring spawn.',
+     regs:'Standard Michigan trout rules on most water — check the current fishing guide for the stretch you\'re on.',
+     stretches:'Croton Dam down through Newaygo: drift-boat water with plenty of wadeable gravel at moderate flows.'},
+    {name:'Huron River', state:'Michigan', lat:42.280, lon:-83.740, match:'huron\\s*river',
+     hook:'Metro Detroit\'s home water and one of the best smallmouth float fisheries in the Midwest, with a spring trout section up top.',
+     hatches:'Smallmouth from late April through October — topwater in summer low light. Carp on the impoundment flats in summer.',
+     regs:'The trout water below the Proud Lake dam has special early-season rules; the rest is standard warm-water regs.',
+     stretches:'Proud Lake to Milford for April browns; Hudson Mills to Delhi for smallmouth; below Belleville and Flat Rock dams on the lower river.'},
+    {name:'Madison River', state:'Montana', lat:45.130, lon:-111.720, match:'madison',
+     hook:'"The 50-mile riffle" — fast, bouldery water absolutely stuffed with browns and rainbows.',
+     hatches:'Salmonflies late June–early July moving upstream day by day; hoppers in August; streamers in fall.',
+     regs:'The stretch between Quake and Ennis lakes is wade-only for much of the season — check current combined regs.',
+     stretches:'Quake Lake down to Ennis is the classic water; Bear Trap Canyon for solitude (mind the rattlesnakes).'},
+    {name:'Bighorn River', state:'Montana', lat:45.310, lon:-107.940, match:'bighorn',
+     hook:'A tailwater below Yellowtail Dam holding one of the highest trout densities in the country.',
+     hatches:'Fishes year-round: midges and baetis spring and fall, PMDs and black caddis mid-to-late summer, sowbugs every single day.',
+     regs:'Standard Montana rules; the river corridor crosses the Crow Reservation — stay below the high-water mark.',
+     stretches:'The upper 13 miles from Afterbay Dam; three access sites make DIY floats straightforward.'},
+    {name:'South Platte River', state:'Colorado', lat:39.250, lon:-105.230, match:'south\\s*platte',
+     hook:'Colorado\'s classic technical tailwater — gin-clear water and educated rainbows that inspect every fly.',
+     hatches:'Midges year-round, baetis spring and fall, tricos on summer mornings, PMDs June–July. Think small: 20s and smaller, 6X.',
+     regs:'Cheesman Canyon is flies-only catch-and-release; the Deckers water is artificials-only with C&R on most of it.',
+     stretches:'Cheesman Canyon via the Gill Trail for the experience; the town water at Deckers for easier access.'},
+    {name:'Frying Pan River', state:'Colorado', lat:39.370, lon:-106.820, match:'frying\\s*pan',
+     hook:'Gold Medal tailwater below Ruedi Reservoir, famous for enormous trout fattened on mysis shrimp.',
+     hatches:'Mysis patterns near the dam year-round; green drakes July–September (rare for a tailwater); BWOs in fall.',
+     regs:'Flies and lures only, catch-and-release on the upper two miles below the dam.',
+     stretches:'Fourteen miles of road-accessible water from the dam down to Basalt; the "Toilet Bowl" pool sits right below the outflow.'},
+    {name:'Green River', state:'Utah', lat:40.910, lon:-109.420, match:'green\\s*river',
+     hook:'Gin-clear tailwater winding under red canyon walls below Flaming Gorge — you can watch every eat happen.',
+     hatches:'The cicada fall in late May–June is the event of the year; BWOs in spring, terrestrials all summer.',
+     regs:'Artificials-only with slot limits — verify current Utah rules before keeping anything.',
+     stretches:'The A section (dam to Little Hole, 7 miles) has a trail the whole way; B section to Browns Park is quieter.'},
+    {name:'San Juan River', state:'New Mexico', lat:36.810, lon:-107.650, match:'san\\s*juan',
+     hook:'A midge factory below Navajo Dam that grows 18-inch rainbows on size-24 flies.',
+     hatches:'Midges every day of the year, BWOs fall through spring, annelid patterns after flow bumps.',
+     regs:'The Quality Water below the dam is single barbless artificials with a one-fish limit — verify current rules.',
+     stretches:'Texas Hole and the braids near the dam are famous for a reason; walk downstream for space.'},
+    {name:'Deschutes River', state:'Oregon', lat:45.170, lon:-121.080, match:'deschutes',
+     hook:'A big desert-canyon river with hard-fighting "redside" rainbows and a summer steelhead run.',
+     hatches:'The salmonfly and golden stone hatch in May–June is legendary; caddis all summer; steelhead August–November.',
+     regs:'No fishing from a floating device — you must anchor or beach and wade.',
+     stretches:'The Maupin day water is the easy entry; Warm Springs to Trout Creek is the classic stonefly float.'},
+    {name:'White River', state:'Arkansas', lat:36.380, lon:-92.560, match:'white\\s*river',
+     hook:'An Ozark tailwater churning out huge numbers of rainbows and true trophy brown trout.',
+     hatches:'Year-round fishery: sowbugs and midges daily, streamer fishing on high water for the big browns, shad kills in late winter.',
+     regs:'Catch-and-release and special-regulation zones below Bull Shoals Dam — check the current map.',
+     stretches:'Bull Shoals Dam down to Cotter; wade at low generation, boat when they\'re running water.'},
+    {name:'Delaware River, West Branch', state:'New York', lat:42.010, lon:-75.380, match:'delaware',
+     hook:'The Northeast\'s most technical dry-fly river — wild rainbows and browns that rise like they\'ve read the books.',
+     hatches:'Sulphurs late May–June evenings are prime; BWOs spring and fall, isonychia in summer. Everything depends on reservoir releases.',
+     regs:'No-kill catch-and-release on much of the upper West Branch — verify the current boundaries.',
+     stretches:'Deposit to Hale Eddy wades well at friendly flows; below Hancock it joins the main stem.'},
+    {name:'Farmington River', state:'Connecticut', lat:41.880, lon:-72.970, match:'farmington',
+     hook:'New England\'s most consistent trout stream — bottom-release cold water keeps it fishing all summer.',
+     hatches:'Hendricksons April–May, sulphurs in June, tricos and terrestrials late summer, BWOs in fall. Fishes year-round.',
+     regs:'The permanent TMA around Riverton and People\'s State Forest is year-round catch-and-release.',
+     stretches:'Riverton down through New Hartford is the heart of it.'}
+  ];
+  WATER_NOTES.forEach(function(n){ n.re = new RegExp(n.match, 'i'); });
+
+  function findWaterNotes(name, stateName){
+    if(!name || !stateName) return null;
+    for(var i = 0; i < WATER_NOTES.length; i++){
+      if(WATER_NOTES[i].state === stateName && WATER_NOTES[i].re.test(name)){
+        return WATER_NOTES[i];
+      }
+    }
+    return null;
+  }
+
   var featureLabels = {city:'City', town:'Town', village:'Village', county:'County', state:'State / region', country:'Country', street:'Street', building:'Building', amenity:'Place', natural:'Natural feature', postcode:'Postcode'};
 
   document.getElementById('searchBtn').addEventListener('click', function(){ doSearch(false); });
@@ -1069,6 +1219,7 @@
           btn.innerHTML = '<span class="rn">' + name + '</span><span class="rd">' + label + (region ? ' \u00b7 ' + region : '') + '</span>';
           btn.addEventListener('click', function(){
             state.location = {name:name, region:region, state:r.state, lat:r.lat, lon:r.lon, country:r.country};
+            state.notes = findWaterNotes(name, r.state);
             status.textContent = 'Loading conditions for ' + name + '...';
             fetchWeather(r.lat, r.lon, document.getElementById('locateStatus')).then(function(){
               status.textContent = 'Set: ' + name;
@@ -1160,7 +1311,7 @@
   });
 
   document.getElementById('restartBtn').addEventListener('click', function(){
-    state = {location:null, gauge:null, tide:null, bestWindow:null, access:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
+    state = {location:null, notes:null, gauge:null, tide:null, bestWindow:null, access:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
     document.querySelectorAll('.ff-opt, .ff-chip, .ff-dir').forEach(function(b){ b.classList.remove('selected'); });
     document.getElementById('locateStatus').textContent = '';
     document.getElementById('gaugeStatus').textContent = '';
@@ -1583,6 +1734,15 @@
     }
     html += '</div>';
 
+    if(state.notes){
+      var n = state.notes;
+      html += '<div class="ff-info-card"><p class="ff-info-label">Local knowledge — ' + n.name + '</p>' +
+        '<p class="ff-info-body">' + n.hook + '</p>' +
+        '<p class="ff-info-body"><strong>Timing:</strong> ' + n.hatches + '</p>' +
+        '<p class="ff-info-body"><strong>Regulations:</strong> ' + n.regs + ' Always verify current rules with the state agency.</p>' +
+        '<p class="ff-info-body"><strong>Where to focus:</strong> ' + n.stretches + '</p></div>';
+    }
+
     if(state.water === 'ocean' && state.tide){
       var tide = state.tide;
       var tideBody = tide.direction ? 'Tide is ' + tide.direction + ' right now. ' : '';
@@ -1718,6 +1878,102 @@
     }
   }
 
+  // ---- full-screen explore map ----
+  var exploreMap = null;
+  var exploreSeen = {};
+  var exploreTimer = null;
+
+  function fishHere(name, lat, lon, stateName, notes){
+    state.location = {name: name, region: stateName || '', state: stateName || null, lat: lat, lon: lon, country: stateName ? 'United States' : null};
+    state.notes = notes || findWaterNotes(name, stateName);
+    document.getElementById('exploreOverlay').classList.remove('open');
+    document.getElementById('searchStatus').textContent = 'Set: ' + name;
+    fetchWeather(lat, lon, document.getElementById('locateStatus')).catch(function(){});
+    fetchGauge(lat, lon);
+    fetchAccess(lat, lon);
+    goToStep(1);
+  }
+
+  function fishHerePopup(title, sub, lat, lon, stateName, notes){
+    var div = document.createElement('div');
+    div.className = 'ff-map-popup';
+    div.innerHTML = '<strong>' + title + '</strong>' + (sub ? '<br>' + sub : '') + '<br>';
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ff-popup-btn';
+    b.textContent = 'Fish here →';
+    b.addEventListener('click', function(){ fishHere(title, lat, lon, stateName, notes); });
+    div.appendChild(b);
+    return div;
+  }
+
+  function exploreFetch(){
+    var hint = document.getElementById('exploreHint');
+    if(exploreMap.getZoom() < 10){
+      hint.textContent = 'Rust dots are storied waters with local notes. Zoom in to load boat launches and fishing access anywhere.';
+      return;
+    }
+    if(exploreTimer) clearTimeout(exploreTimer);
+    exploreTimer = setTimeout(function(){
+      var b = exploreMap.getBounds();
+      var box = b.getSouth() + ',' + b.getWest() + ',' + b.getNorth() + ',' + b.getEast();
+      var q = '[out:json][timeout:20];(nwr["leisure"="slipway"](' + box + ');nwr["leisure"="fishing"](' + box + '););out center tags 120;';
+      hint.textContent = 'Loading access points...';
+      overpassFetch(q).then(function(data){
+        var added = 0;
+        (data.elements || []).forEach(function(e){
+          var id = e.type + e.id;
+          if(exploreSeen[id]) return;
+          var elat = e.lat != null ? e.lat : (e.center && e.center.lat);
+          var elon = e.lon != null ? e.lon : (e.center && e.center.lon);
+          if(elat == null) return;
+          exploreSeen[id] = true;
+          added++;
+          var t = e.tags || {};
+          var kind = t.leisure === 'slipway' ? 'Boat / canoe launch' : 'Fishing access';
+          var m = L.circleMarker([elat, elon], {radius:6, color:'#8C6A38', fillColor:'#B58A4A', fillOpacity:0.9});
+          m.bindPopup(function(){ return fishHerePopup(t.name || kind, kind, elat, elon, null, null); }).addTo(exploreMap);
+        });
+        hint.textContent = added ? 'Tap a dot, then "Fish here" to build a plan for that spot.' : 'No mapped access in this view — pan around or zoom elsewhere.';
+      }).catch(function(){
+        hint.textContent = 'Couldn\'t load access points right now — try panning again in a moment.';
+      });
+    }, 600);
+  }
+
+  function openExplore(){
+    document.getElementById('exploreOverlay').classList.add('open');
+    setTimeout(function(){
+      if(exploreMap){
+        exploreMap.invalidateSize();
+        return;
+      }
+      exploreMap = L.map('exploreMap');
+      L.tileLayer('https://maps.geoapify.com/v1/tile/osm-bright/{z}/{x}/{y}.png?apiKey=' + GEOAPIFY_KEY, {
+        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://www.geoapify.com/">Geoapify</a>',
+        maxZoom: 19
+      }).addTo(exploreMap);
+      if(ipBias){
+        var parts = ipBias.split(',');
+        exploreMap.setView([parseFloat(parts[1]), parseFloat(parts[0])], 9);
+      } else {
+        exploreMap.setView([39.8, -98.5], 4);
+      }
+      WATER_NOTES.forEach(function(n){
+        var m = L.circleMarker([n.lat, n.lon], {radius:8, color:'#A9512E', fillColor:'#A9512E', fillOpacity:0.9});
+        m.bindPopup(function(){ return fishHerePopup(n.name, n.state + ' · storied water with local notes', n.lat, n.lon, n.state, n); }).addTo(exploreMap);
+      });
+      exploreMap.on('moveend zoomend', exploreFetch);
+      window.__ffExploreMap = exploreMap;
+      exploreFetch();
+    }, 60);
+  }
+
+  document.getElementById('exploreBtn').addEventListener('click', openExplore);
+  document.getElementById('exploreClose').addEventListener('click', function(){
+    document.getElementById('exploreOverlay').classList.remove('open');
+  });
+
   (function initLastSetup(){
     var saved = null;
     try{ saved = JSON.parse(localStorage.getItem('ffLast') || 'null'); }catch(e){}
@@ -1728,6 +1984,7 @@
     btn.textContent = 'Same spot as last time: ' + saved.location.name + ' →';
     btn.addEventListener('click', function(){
       state.location = saved.location;
+      state.notes = findWaterNotes(saved.location.name, saved.location.state);
       state.water = saved.water;
       state.species = saved.species;
       state.method = saved.method;
