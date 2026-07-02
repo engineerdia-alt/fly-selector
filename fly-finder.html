@@ -738,7 +738,7 @@
   }
 
   function fetchGauge(lat, lon){
-    var d = 0.15;
+    var d = 0.35;
     var bbox = [(lon-d).toFixed(5), (lat-d).toFixed(5), (lon+d).toFixed(5), (lat+d).toFixed(5)].join(',');
     var url = 'https://waterservices.usgs.gov/nwis/iv/?format=json&bBox=' + bbox + '&parameterCd=00060,00010&siteStatus=active';
     state.gauge = null;
@@ -807,6 +807,16 @@
   }
 
   var GEOAPIFY_KEY = '714aba9f92134abdb5840cba44fda0dd';
+
+  // rough IP-based location so search results rank nearby waters first
+  var ipBias = null;
+  fetch('https://api.geoapify.com/v1/ipinfo?apiKey=' + GEOAPIFY_KEY)
+    .then(function(r){ return r.json(); })
+    .then(function(d){
+      if(d.location && d.location.longitude != null){
+        ipBias = d.location.longitude + ',' + d.location.latitude;
+      }
+    }).catch(function(){});
   function fmtTime(d){
     return d ? d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) : null;
   }
@@ -855,32 +865,67 @@
     }).catch(function(){});
   }
 
-  function fetchAccess(lat, lon){
-    state.access = null;
-    var q = '[out:json][timeout:20];(nwr["leisure"="slipway"](around:8000,' + lat + ',' + lon + ');' +
-            'nwr["leisure"="fishing"](around:8000,' + lat + ',' + lon + '););out center tags 40;';
-    fetch('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q))
+  function overpassAccess(q, lat, lon, requireName){
+    return fetch('https://overpass-api.de/api/interpreter?data=' + encodeURIComponent(q))
       .then(function(r){ return r.json(); })
       .then(function(data){
-        if(!data.elements || !data.elements.length) return;
-        var spots = data.elements.map(function(e){
+        var kinds = {slipway:'Boat / canoe launch', fishing:'Fishing access', park:'Park / river access', camp_site:'Campground'};
+        var seen = {};
+        var spots = [];
+        (data.elements || []).forEach(function(e){
+          var t = e.tags || {};
+          var kind = kinds[t.leisure] || kinds[t.tourism];
+          if(!kind) return;
+          if(requireName && !t.name) return;
           var elat = e.lat != null ? e.lat : (e.center && e.center.lat);
           var elon = e.lon != null ? e.lon : (e.center && e.center.lon);
-          if(elat == null) return null;
-          var t = e.tags || {};
-          return {
-            name: t.name || null,
-            kind: t.leisure === 'slipway' ? 'Boat launch' : 'Fishing access',
-            lat: elat, lon: elon,
-            dist: haversineMi(lat, lon, elat, elon)
-          };
-        }).filter(Boolean);
-        if(!spots.length) return;
+          if(elat == null) return;
+          var key = t.name ? t.name.toLowerCase() : (elat.toFixed(3) + ',' + elon.toFixed(3));
+          if(seen[key]) return;
+          seen[key] = true;
+          spots.push({name: t.name || null, kind: kind, lat: elat, lon: elon, dist: haversineMi(lat, lon, elat, elon)});
+        });
         spots.sort(function(a, b){
           return (a.name ? 0 : 1) - (b.name ? 0 : 1) || a.dist - b.dist;
         });
-        state.access = spots.slice(0, 5);
-      }).catch(function(){});
+        return spots;
+      });
+  }
+
+  function fetchAccess(lat, lon){
+    state.access = null;
+    state.accessAlong = false;
+    var pointQ = '[out:json][timeout:20];(nwr["leisure"="slipway"](around:8000,' + lat + ',' + lon + ');' +
+                 'nwr["leisure"="fishing"](around:8000,' + lat + ',' + lon + '););out center tags 40;';
+    var name = (state.location && state.location.name) || '';
+    var movingWord = /\b(?:river|creek|stream|brook|branch|fork)\b/i;
+    // "Au Sable River Access" -> "Au Sable": the distinctive part before the water word
+    var stem = name.split(movingWord)[0].replace(/[.*+?^${}()|[\]\\"']/g, ' ').replace(/\s+/g, ' ').trim();
+    var done = function(spots){
+      if(spots && spots.length) state.access = spots.slice(0, 6);
+    };
+    if(movingWord.test(name) && stem){
+      // follow the river itself: access points within 400m of any matching
+      // waterway segment inside 20km, not just a circle around this spot
+      var corridorQ = '[out:json][timeout:25];' +
+        'way["waterway"~"river|stream"]["name"~"' + stem + '",i](around:20000,' + lat + ',' + lon + ')->.riv;' +
+        '(nwr["leisure"="slipway"](around.riv:400);' +
+        'nwr["leisure"="fishing"](around.riv:400);' +
+        'nwr["leisure"="park"](around.riv:400);' +
+        'nwr["tourism"="camp_site"](around.riv:400););out center tags 60;';
+      overpassAccess(corridorQ, lat, lon, true).then(function(spots){
+        if(spots.length){
+          state.accessAlong = true;
+          done(spots);
+        } else {
+          return overpassAccess(pointQ, lat, lon, false).then(done);
+        }
+      }).catch(function(){
+        overpassAccess(pointQ, lat, lon, false).then(done).catch(function(){});
+      });
+    } else {
+      overpassAccess(pointQ, lat, lon, false).then(done).catch(function(){});
+    }
   }
 
   function moonPhase(){
@@ -917,6 +962,34 @@
     typeTimer = setTimeout(function(){ doSearch(true); }, 350);
   });
 
+  // "ausable" won't exact-match OSM's "Au Sable"; also try the split/joined
+  // spellings of compound place-name prefixes and merge the result sets
+  function queryVariants(q){
+    var prefixes = ['au', 'la', 'el', 'mc', 'san', 'de'];
+    var variants = [q];
+    var words = q.split(/\s+/);
+    for(var i = 0; i < words.length; i++){
+      var w = words[i].toLowerCase();
+      for(var p = 0; p < prefixes.length; p++){
+        if(w.length > prefixes[p].length + 2 && w.indexOf(prefixes[p]) === 0){
+          var v = words.slice();
+          v[i] = words[i].slice(0, prefixes[p].length) + ' ' + words[i].slice(prefixes[p].length);
+          variants.push(v.join(' '));
+          break;
+        }
+      }
+    }
+    for(var j = 0; j < words.length - 1; j++){
+      if(prefixes.indexOf(words[j].toLowerCase()) !== -1){
+        var v2 = words.slice();
+        v2.splice(j, 2, words[j] + words[j + 1]);
+        variants.push(v2.join(' '));
+        break;
+      }
+    }
+    return variants.slice(0, 3);
+  }
+
   function doSearch(auto){
     var q = document.getElementById('searchInput').value.trim();
     var status = document.getElementById('searchStatus');
@@ -927,16 +1000,33 @@
     if(!q){ status.textContent = auto ? '' : 'Type a name to search.'; return; }
     status.textContent = 'Searching...';
     var reqId = ++searchSeq;
-    fetch('https://api.geoapify.com/v1/geocode/autocomplete?text=' + encodeURIComponent(q) + '&limit=6&format=json&apiKey=' + GEOAPIFY_KEY)
-      .then(function(r){ return r.json(); })
-      .then(function(data){
+    Promise.all(queryVariants(q).map(function(v){
+      return fetch('https://api.geoapify.com/v1/geocode/autocomplete?text=' + encodeURIComponent(v) + '&limit=6&format=json' + (ipBias ? '&bias=proximity:' + ipBias : '') + '&apiKey=' + GEOAPIFY_KEY)
+        .then(function(r){ return r.json(); })
+        .catch(function(){ return {}; });
+    })).then(function(datas){
         if(reqId !== searchSeq) return;
-        if(!data.results || !data.results.length){
+        var lists = datas.map(function(d){ return d.results || []; });
+        var merged = [], seen = {}, idx = 0, more = true;
+        while(more && merged.length < 8){
+          more = false;
+          for(var li = 0; li < lists.length && merged.length < 8; li++){
+            var cand = lists[li][idx];
+            if(!cand) continue;
+            more = true;
+            var key = cand.place_id || cand.formatted;
+            if(seen[key]) continue;
+            seen[key] = true;
+            merged.push(cand);
+          }
+          idx++;
+        }
+        if(!merged.length){
           status.textContent = 'No matches found. Try a different spelling, or skip and set it up manually.';
           return;
         }
         status.textContent = 'Pick the closest match:';
-        data.results.forEach(function(r){
+        merged.forEach(function(r){
           var btn = document.createElement('button');
           btn.className = 'ff-result-item';
           var name = r.name || r.address_line1 || r.city || r.formatted;
@@ -958,7 +1048,9 @@
           results.appendChild(btn);
         });
       }).catch(function(){
-        status.textContent = 'Search failed. Try again, or skip and set it up manually.';
+        if(reqId === searchSeq){
+          status.textContent = 'Search failed. Try again, or skip and set it up manually.';
+        }
       });
   }
 
@@ -1511,7 +1603,7 @@
         var label = a.name || ('Unnamed ' + a.kind.toLowerCase());
         accHtml += '<p class="ff-alt-item">' + label + ' — ' + a.kind + ', ' + a.dist.toFixed(1) + ' mi · <a href="https://www.google.com/maps?q=' + a.lat + ',' + a.lon + '" target="_blank" rel="noopener">map ↗</a></p>';
       });
-      html += '<div class="ff-info-card"><p class="ff-info-label">Access points nearby</p>' + accHtml + '</div>';
+      html += '<div class="ff-info-card"><p class="ff-info-label">' + (state.accessAlong ? 'Access along the river' : 'Access points nearby') + '</p>' + accHtml + '</div>';
     }
 
     if(state.location && state.location.state && state.location.country === 'United States'){
