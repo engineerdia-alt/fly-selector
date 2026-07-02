@@ -539,7 +539,7 @@
 
 <script>
 (function(){
-  var state = {location:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
+  var state = {location:null, gauge:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
   var currentStep = 0;
 
   function goToStep(idx){
@@ -575,6 +575,11 @@
     var hour = new Date().getHours();
 
     var tempVal = tempF < 60 ? 'cold' : (tempF < 75 ? 'moderate' : 'warm');
+    // a real water-temp reading from a USGS gauge beats the air-temp guess
+    if(state.gauge && state.gauge.waterTempF != null){
+      var wt = state.gauge.waterTempF;
+      tempVal = wt < 60 ? 'cold' : (wt < 75 ? 'moderate' : 'warm');
+    }
     var skyVal;
     if(hour < 8 || hour >= 19){
       skyVal = 'lowlight';
@@ -604,21 +609,109 @@
     });
   }
 
+  function haversineMi(lat1, lon1, lat2, lon2){
+    var toRad = Math.PI / 180;
+    var dLat = (lat2 - lat1) * toRad;
+    var dLon = (lon2 - lon1) * toRad;
+    var a = Math.sin(dLat/2) * Math.sin(dLat/2) +
+            Math.cos(lat1 * toRad) * Math.cos(lat2 * toRad) * Math.sin(dLon/2) * Math.sin(dLon/2);
+    return 3959 * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }
+
+  function latestValue(ts){
+    var vals = ts.values[0] && ts.values[0].value;
+    if(vals && vals.length){
+      var v = parseFloat(vals[vals.length - 1].value);
+      if(!isNaN(v) && v !== -999999) return v;
+    }
+    return null;
+  }
+
+  function renderGaugeStatus(){
+    var g = state.gauge;
+    var el = document.getElementById('gaugeStatus');
+    if(!g || !el) return;
+    var bits = [];
+    if(g.flow != null){
+      var flowTxt = Math.round(g.flow) + ' cfs';
+      if(g.trend === 'rising' || g.trend === 'falling'){
+        flowTxt += ', ' + g.trend + ' (' + (g.trendPct > 0 ? '+' : '') + g.trendPct + '% in 24h)';
+      } else if(g.trend === 'steady'){
+        flowTxt += ', steady';
+      }
+      bits.push(flowTxt);
+    }
+    if(g.waterTempF != null){
+      bits.push('water ' + g.waterTempF + '°F — set your water temp from this reading');
+    }
+    el.textContent = 'USGS gauge ' + g.name + ' (' + g.dist.toFixed(1) + ' mi away): ' + bits.join(' · ') + '.';
+  }
+
   function fetchGauge(lat, lon){
     var d = 0.15;
-    var bbox = (lon-d) + ',' + (lat-d) + ',' + (lon+d) + ',' + (lat+d);
-    var url = 'https://waterservices.usgs.gov/nwis/iv/?format=json&bBox=' + bbox + '&parameterCd=00060&siteStatus=active';
-    var gaugeStatus = document.getElementById('gaugeStatus');
+    var bbox = [(lon-d).toFixed(5), (lat-d).toFixed(5), (lon+d).toFixed(5), (lat+d).toFixed(5)].join(',');
+    var url = 'https://waterservices.usgs.gov/nwis/iv/?format=json&bBox=' + bbox + '&parameterCd=00060,00010&siteStatus=active';
+    state.gauge = null;
     fetch(url).then(function(r){ return r.json(); }).then(function(data){
       var series = data.value && data.value.timeSeries;
-      if(series && series.length){
-        var site = series[0];
-        var name = site.sourceInfo.siteName;
-        var vals = site.values[0].value;
-        if(vals && vals.length){
-          var flow = Math.round(parseFloat(vals[vals.length-1].value));
-          gaugeStatus.textContent = 'Nearby USGS gauge (' + name + '): ' + flow + ' cfs right now.';
+      if(!series || !series.length) return;
+
+      var sites = {};
+      series.forEach(function(ts){
+        var code = ts.sourceInfo.siteCode[0].value;
+        if(!sites[code]){
+          var loc = ts.sourceInfo.geoLocation.geogLocation;
+          sites[code] = {
+            code: code,
+            name: ts.sourceInfo.siteName,
+            dist: haversineMi(lat, lon, loc.latitude, loc.longitude),
+            flow: null,
+            waterTempF: null
+          };
         }
+        var v = latestValue(ts);
+        if(v == null) return;
+        var param = ts.variable.variableCode[0].value;
+        if(param === '00060') sites[code].flow = v;
+        if(param === '00010') sites[code].waterTempF = Math.round(v * 9/5 + 32);
+      });
+
+      var list = Object.keys(sites).map(function(k){ return sites[k]; }).filter(function(s){
+        return s.flow != null || s.waterTempF != null;
+      });
+      if(!list.length) return;
+
+      var wanted = state.location && state.location.name ? state.location.name.toUpperCase() : '';
+      list.sort(function(a, b){
+        var am = wanted && a.name.indexOf(wanted) !== -1 ? 0 : 1;
+        var bm = wanted && b.name.indexOf(wanted) !== -1 ? 0 : 1;
+        return (am - bm) || (a.dist - b.dist);
+      });
+      var site = list[0];
+      state.gauge = site;
+
+      if(site.waterTempF != null){
+        selectChip('temp', site.waterTempF < 60 ? 'cold' : (site.waterTempF < 75 ? 'moderate' : 'warm'));
+      }
+      renderGaugeStatus();
+
+      if(site.flow != null){
+        fetch('https://waterservices.usgs.gov/nwis/iv/?format=json&sites=' + site.code + '&parameterCd=00060&period=P1D')
+          .then(function(r){ return r.json(); })
+          .then(function(hist){
+            var ts = hist.value && hist.value.timeSeries && hist.value.timeSeries[0];
+            var vals = ts && ts.values[0] && ts.values[0].value;
+            if(vals && vals.length > 1){
+              var first = parseFloat(vals[0].value);
+              var last = parseFloat(vals[vals.length - 1].value);
+              if(first > 0 && !isNaN(last)){
+                var pct = (last - first) / first * 100;
+                site.trendPct = Math.round(pct);
+                site.trend = pct > 15 ? 'rising' : (pct < -15 ? 'falling' : 'steady');
+                renderGaugeStatus();
+              }
+            }
+          }).catch(function(){});
       }
     }).catch(function(){});
   }
@@ -739,7 +832,7 @@
   });
 
   document.getElementById('restartBtn').addEventListener('click', function(){
-    state = {location:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
+    state = {location:null, gauge:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
     document.querySelectorAll('.ff-opt, .ff-chip, .ff-dir').forEach(function(b){ b.classList.remove('selected'); });
     document.getElementById('locateStatus').textContent = '';
     document.getElementById('gaugeStatus').textContent = '';
@@ -761,6 +854,7 @@
       fetchWeather(pos.coords.latitude, pos.coords.longitude, status).catch(function(){
         status.textContent = 'Couldn\'t reach the weather service. Set conditions manually below.';
       });
+      fetchGauge(pos.coords.latitude, pos.coords.longitude);
     }, function(){
       status.textContent = 'Location access was denied. Set conditions manually below.';
     });
@@ -842,6 +936,13 @@
       lineType = 'floating line';
       secondaryLabel = 'Browse all flies \u2197';
       secondaryUrl = shopUrl('trout');
+    }
+
+    var g = state.gauge;
+    if(g && g.trend === 'rising' && state.water === 'river'){
+      reasoning += ' The nearby gauge shows flow coming up, so the water is likely gaining color — err toward the bigger, darker end of this pattern and work the softer edges out of the main push.';
+    } else if(g && g.trend === 'falling' && state.water === 'river'){
+      reasoning += ' Flow is dropping and the water is likely clearing — lean smaller and more natural, with a longer, lighter leader.';
     }
 
     return {primary:primary, term:term, color:color, reasoning:reasoning, lineType:lineType, secondaryLabel:secondaryLabel, secondaryUrl:secondaryUrl};
@@ -961,6 +1062,24 @@
     html += '<a class="ff-btn ff-btn-primary" href="' + shopUrl(rec.term) + '" target="_top">Shop this fly \u2197</a>';
     html += '<a class="ff-btn ff-btn-secondary" href="' + rec.secondaryUrl + '" target="_top">' + rec.secondaryLabel + '</a>';
     html += '</div></div>';
+
+    if(state.gauge && state.gauge.flow != null){
+      var g = state.gauge;
+      var flowBody = g.name + ' reads ' + Math.round(g.flow) + ' cfs';
+      if(g.trend === 'rising'){
+        flowBody += ', up ' + Math.abs(g.trendPct) + '% in the last 24 hours. Rising water usually carries more color and pushes fish out of the main current — work the slower seams and inside banks.';
+      } else if(g.trend === 'falling'){
+        flowBody += ', down ' + Math.abs(g.trendPct) + '% in the last 24 hours. Falling, clearing water makes fish spookier — approach quietly and expect them to hold in deeper, safer lies.';
+      } else if(g.trend === 'steady'){
+        flowBody += ' and has held steady over the last 24 hours, so fish should be in their usual seasonal lies.';
+      } else {
+        flowBody += ' right now.';
+      }
+      if(g.waterTempF != null){
+        flowBody += ' Water temp at the gauge: ' + g.waterTempF + '°F.';
+      }
+      html += '<div class="ff-info-card"><p class="ff-info-label">River flow (USGS, ' + g.dist.toFixed(1) + ' mi away)</p><p class="ff-info-body">' + flowBody + '</p></div>';
+    }
 
     html += '<div class="ff-info-card"><p class="ff-info-label">What to expect this time of year</p><p class="ff-info-body">' + forage + '</p></div>';
     html += '<div class="ff-info-card"><p class="ff-info-label">Working from ' + state.method + '</p><p class="ff-info-body">' + method + '</p></div>';
