@@ -556,6 +556,7 @@
   <div class="ff-step" data-step="2">
     <p class="ff-q">What are you after?</p>
     <div class="ff-options" id="speciesOptions"></div>
+    <p class="ff-locate-status" id="speciesNote"></p>
     <button class="ff-back" data-back="1">&larr; back</button>
   </div>
 
@@ -638,12 +639,12 @@
   var resultMap = null;
 
   var speciesInfo = {
-    trout:     {label:'Trout', hint:'stream or stocked'},
+    trout:     {label:'Trout', hint:'stream or stocked', cold:true},
     bass:      {label:'Bass', hint:'smallmouth or largemouth'},
     pike:      {label:'Pike or musky', hint:'toothy predators'},
     panfish:   {label:'Panfish', hint:'bluegill, crappie'},
     carp:      {label:'Carp', hint:'sight-fished bruisers'},
-    steelhead: {label:'Steelhead & salmon', hint:'migratory chrome'},
+    steelhead: {label:'Steelhead & salmon', hint:'migratory chrome', cold:true},
     striper:   {label:'Striped bass', hint:'surf, rips, estuaries'},
     bluefish:  {label:'Bluefish', hint:'choppers on bait'},
     albie:     {label:'False albacore & bonito', hint:'speedsters on small bait'},
@@ -658,9 +659,25 @@
 
   function renderSpeciesOptions(){
     var wrap = document.getElementById('speciesOptions');
+    var noteEl = document.getElementById('speciesNote');
     wrap.innerHTML = '';
-    (speciesByWater[state.water] || speciesByWater.river).forEach(function(key){
+    noteEl.textContent = '';
+    // curated waters carry their own species list; otherwise use the water type
+    var list = (state.notes && state.notes.species) ? state.notes.species.slice()
+             : (speciesByWater[state.water] || speciesByWater.river).slice();
+    // real gauge water temp beats assumptions: hide coldwater species where
+    // the water is demonstrably too warm for them right now
+    var g = state.gauge;
+    if(state.water !== 'ocean' && g && g.waterTempF != null && g.waterTempF >= 72){
+      var trimmed = list.filter(function(k){ return !speciesInfo[k].cold; });
+      if(trimmed.length && trimmed.length < list.length){
+        list = trimmed;
+        noteEl.textContent = 'The nearby gauge reads ' + g.waterTempF + '°F — too warm for trout or steelhead here right now, so coldwater species are hidden.';
+      }
+    }
+    list.forEach(function(key){
       var info = speciesInfo[key];
+      if(!info) return;
       var btn = document.createElement('button');
       btn.className = 'ff-opt';
       btn.dataset.field = 'species';
@@ -807,7 +824,9 @@
       bits.push(flowTxt);
     }
     if(g.waterTempF != null){
-      bits.push('water ' + g.waterTempF + '°F — set your water temp from this reading');
+      bits.push(g.tempFrom
+        ? 'water ~' + g.waterTempF + '°F (nearest temp sensor: ' + g.tempFrom + ')'
+        : 'water ' + g.waterTempF + '°F — set your water temp from this reading');
     }
     el.textContent = 'USGS gauge ' + g.name + ' (' + g.dist.toFixed(1) + ' mi away): ' + bits.join(' · ') + '.';
   }
@@ -855,12 +874,29 @@
         return (am - bm) || (a.dist - b.dist);
       });
       var site = list[0];
+      // the matched gauge may only measure flow — borrow water temp from the
+      // nearest temp-equipped gauge in the same area (marked as approximate)
+      if(site.waterTempF == null){
+        var byDist = list.slice().sort(function(a, b){ return a.dist - b.dist; });
+        for(var bi = 0; bi < byDist.length; bi++){
+          if(byDist[bi].waterTempF != null){
+            site.waterTempF = byDist[bi].waterTempF;
+            site.tempFrom = byDist[bi].name;
+            break;
+          }
+        }
+      }
       state.gauge = site;
 
       if(site.waterTempF != null){
         selectChip('temp', site.waterTempF < 60 ? 'cold' : (site.waterTempF < 75 ? 'moderate' : 'warm'));
       }
       renderGaugeStatus();
+      // the warm-water species filter depends on gauge temp, which may
+      // arrive while the user is already looking at the species step
+      if(currentStep === 2){
+        renderSpeciesOptions();
+      }
 
       if(site.flow != null){
         fetch('https://waterservices.usgs.gov/nwis/iv/?format=json&sites=' + site.code + '&parameterCd=00060&period=P1D')
@@ -1043,77 +1079,77 @@
   // Curated local knowledge for storied waters. General guidance from
   // well-known angling lore — always tell users to verify current regs.
   var WATER_NOTES = [
-    {name:'Au Sable River', state:'Michigan', lat:44.660, lon:-84.620, match:'au\\s*sable',
+    {name:'Au Sable River', species:['trout', 'steelhead'], state:'Michigan', lat:44.660, lon:-84.620, match:'au\\s*sable',
      hook:'Michigan\'s most storied trout river and the birthplace of Trout Unlimited. Sandy, spring-fed, and wadeable, with brook and brown trout in the upper river.',
      hatches:'Hendricksons late April–May, sulphurs and brown drakes in June, then the famous Hex hatch at night from late June into mid-July. Fall is streamer season for the biggest browns.',
      regs:'The "Holy Water" from Burton\'s Landing to Wakeley Bridge is flies-only, catch-and-release.',
      stretches:'Holy Water for numbers of fish, the South Branch through the Mason Tract for solitude, and below Mio dam for trophy browns.'},
-    {name:'Pere Marquette River', state:'Michigan', lat:43.900, lon:-85.850, match:'pere\\s*marquette',
+    {name:'Pere Marquette River', species:['trout', 'steelhead'], state:'Michigan', lat:43.900, lon:-85.850, match:'pere\\s*marquette',
      hook:'A wild, undammed river with resident browns plus heavy runs of salmon in fall and steelhead through winter and spring.',
      hatches:'Gray drakes and sulphurs May–June, hoppers in August. King salmon August–October; steelhead November through April.',
      regs:'The flies-only, no-kill section runs from the M-37 bridge down to Gleason\'s Landing.',
      stretches:'The Baldwin-area flies-only water wades well; the lower river fishes best from a drift boat.'},
-    {name:'Manistee River', state:'Michigan', lat:44.640, lon:-84.980, match:'manistee',
+    {name:'Manistee River', species:['trout', 'steelhead'], state:'Michigan', lat:44.640, lon:-84.980, match:'manistee',
      hook:'The Au Sable\'s quieter twin — classic sand-and-gravel brook and brown trout water in the upper river, big migratory fish below Tippy Dam.',
      hatches:'A similar calendar to the Au Sable: drakes and Hex in the slower reaches late June–July, hoppers in August. Below Tippy: salmon in fall, steelhead November–April.',
      regs:'Artificials-only with special size limits between M-72 and CCC Bridge on the upper river.',
      stretches:'Yellow Trees Landing to CCC Bridge up top; Tippy Dam down to High Bridge for salmon and steelhead.'},
-    {name:'Muskegon River', state:'Michigan', lat:43.440, lon:-85.660, match:'muskegon',
+    {name:'Muskegon River', species:['steelhead', 'trout', 'bass'], state:'Michigan', lat:43.440, lon:-85.660, match:'muskegon',
      hook:'A big, year-round tailwater below Croton Dam with browns, rainbows, and some of Michigan\'s heaviest steelhead and salmon runs.',
      hatches:'Caddis and gray drakes May–June for residents; salmon September–October; steelhead November–April with the peak around the spring spawn.',
      regs:'Standard Michigan trout rules on most water — check the current fishing guide for the stretch you\'re on.',
      stretches:'Croton Dam down through Newaygo: drift-boat water with plenty of wadeable gravel at moderate flows.'},
-    {name:'Huron River', state:'Michigan', lat:42.280, lon:-83.740, match:'huron\\s*river',
+    {name:'Huron River', species:['bass', 'panfish', 'carp', 'pike', 'trout'], state:'Michigan', lat:42.280, lon:-83.740, match:'huron\\s*river',
      hook:'Metro Detroit\'s home water and one of the best smallmouth float fisheries in the Midwest, with a spring trout section up top.',
      hatches:'Smallmouth from late April through October — topwater in summer low light. Carp on the impoundment flats in summer.',
      regs:'The trout water below the Proud Lake dam has special early-season rules; the rest is standard warm-water regs.',
      stretches:'Proud Lake to Milford for April browns; Hudson Mills to Delhi for smallmouth; below Belleville and Flat Rock dams on the lower river.'},
-    {name:'Madison River', state:'Montana', lat:45.130, lon:-111.720, match:'madison',
+    {name:'Madison River', species:['trout'], state:'Montana', lat:45.130, lon:-111.720, match:'madison',
      hook:'"The 50-mile riffle" — fast, bouldery water absolutely stuffed with browns and rainbows.',
      hatches:'Salmonflies late June–early July moving upstream day by day; hoppers in August; streamers in fall.',
      regs:'The stretch between Quake and Ennis lakes is wade-only for much of the season — check current combined regs.',
      stretches:'Quake Lake down to Ennis is the classic water; Bear Trap Canyon for solitude (mind the rattlesnakes).'},
-    {name:'Bighorn River', state:'Montana', lat:45.310, lon:-107.940, match:'bighorn',
+    {name:'Bighorn River', species:['trout'], state:'Montana', lat:45.310, lon:-107.940, match:'bighorn',
      hook:'A tailwater below Yellowtail Dam holding one of the highest trout densities in the country.',
      hatches:'Fishes year-round: midges and baetis spring and fall, PMDs and black caddis mid-to-late summer, sowbugs every single day.',
      regs:'Standard Montana rules; the river corridor crosses the Crow Reservation — stay below the high-water mark.',
      stretches:'The upper 13 miles from Afterbay Dam; three access sites make DIY floats straightforward.'},
-    {name:'South Platte River', state:'Colorado', lat:39.250, lon:-105.230, match:'south\\s*platte',
+    {name:'South Platte River', species:['trout'], state:'Colorado', lat:39.250, lon:-105.230, match:'south\\s*platte',
      hook:'Colorado\'s classic technical tailwater — gin-clear water and educated rainbows that inspect every fly.',
      hatches:'Midges year-round, baetis spring and fall, tricos on summer mornings, PMDs June–July. Think small: 20s and smaller, 6X.',
      regs:'Cheesman Canyon is flies-only catch-and-release; the Deckers water is artificials-only with C&R on most of it.',
      stretches:'Cheesman Canyon via the Gill Trail for the experience; the town water at Deckers for easier access.'},
-    {name:'Frying Pan River', state:'Colorado', lat:39.370, lon:-106.820, match:'frying\\s*pan',
+    {name:'Frying Pan River', species:['trout'], state:'Colorado', lat:39.370, lon:-106.820, match:'frying\\s*pan',
      hook:'Gold Medal tailwater below Ruedi Reservoir, famous for enormous trout fattened on mysis shrimp.',
      hatches:'Mysis patterns near the dam year-round; green drakes July–September (rare for a tailwater); BWOs in fall.',
      regs:'Flies and lures only, catch-and-release on the upper two miles below the dam.',
      stretches:'Fourteen miles of road-accessible water from the dam down to Basalt; the "Toilet Bowl" pool sits right below the outflow.'},
-    {name:'Green River', state:'Utah', lat:40.910, lon:-109.420, match:'green\\s*river',
+    {name:'Green River', species:['trout'], state:'Utah', lat:40.910, lon:-109.420, match:'green\\s*river',
      hook:'Gin-clear tailwater winding under red canyon walls below Flaming Gorge — you can watch every eat happen.',
      hatches:'The cicada fall in late May–June is the event of the year; BWOs in spring, terrestrials all summer.',
      regs:'Artificials-only with slot limits — verify current Utah rules before keeping anything.',
      stretches:'The A section (dam to Little Hole, 7 miles) has a trail the whole way; B section to Browns Park is quieter.'},
-    {name:'San Juan River', state:'New Mexico', lat:36.810, lon:-107.650, match:'san\\s*juan',
+    {name:'San Juan River', species:['trout'], state:'New Mexico', lat:36.810, lon:-107.650, match:'san\\s*juan',
      hook:'A midge factory below Navajo Dam that grows 18-inch rainbows on size-24 flies.',
      hatches:'Midges every day of the year, BWOs fall through spring, annelid patterns after flow bumps.',
      regs:'The Quality Water below the dam is single barbless artificials with a one-fish limit — verify current rules.',
      stretches:'Texas Hole and the braids near the dam are famous for a reason; walk downstream for space.'},
-    {name:'Deschutes River', state:'Oregon', lat:45.170, lon:-121.080, match:'deschutes',
+    {name:'Deschutes River', species:['trout', 'steelhead'], state:'Oregon', lat:45.170, lon:-121.080, match:'deschutes',
      hook:'A big desert-canyon river with hard-fighting "redside" rainbows and a summer steelhead run.',
      hatches:'The salmonfly and golden stone hatch in May–June is legendary; caddis all summer; steelhead August–November.',
      regs:'No fishing from a floating device — you must anchor or beach and wade.',
      stretches:'The Maupin day water is the easy entry; Warm Springs to Trout Creek is the classic stonefly float.'},
-    {name:'White River', state:'Arkansas', lat:36.380, lon:-92.560, match:'white\\s*river',
+    {name:'White River', species:['trout'], state:'Arkansas', lat:36.380, lon:-92.560, match:'white\\s*river',
      hook:'An Ozark tailwater churning out huge numbers of rainbows and true trophy brown trout.',
      hatches:'Year-round fishery: sowbugs and midges daily, streamer fishing on high water for the big browns, shad kills in late winter.',
      regs:'Catch-and-release and special-regulation zones below Bull Shoals Dam — check the current map.',
      stretches:'Bull Shoals Dam down to Cotter; wade at low generation, boat when they\'re running water.'},
-    {name:'Delaware River, West Branch', state:'New York', lat:42.010, lon:-75.380, match:'delaware',
+    {name:'Delaware River, West Branch', species:['trout'], state:'New York', lat:42.010, lon:-75.380, match:'delaware',
      hook:'The Northeast\'s most technical dry-fly river — wild rainbows and browns that rise like they\'ve read the books.',
      hatches:'Sulphurs late May–June evenings are prime; BWOs spring and fall, isonychia in summer. Everything depends on reservoir releases.',
      regs:'No-kill catch-and-release on much of the upper West Branch — verify the current boundaries.',
      stretches:'Deposit to Hale Eddy wades well at friendly flows; below Hancock it joins the main stem.'},
-    {name:'Farmington River', state:'Connecticut', lat:41.880, lon:-72.970, match:'farmington',
+    {name:'Farmington River', species:['trout'], state:'Connecticut', lat:41.880, lon:-72.970, match:'farmington',
      hook:'New England\'s most consistent trout stream — bottom-release cold water keeps it fishing all summer.',
      hatches:'Hendricksons April–May, sulphurs in June, tricos and terrestrials late summer, BWOs in fall. Fishes year-round.',
      regs:'The permanent TMA around Riverton and People\'s State Forest is year-round catch-and-release.',
@@ -1205,11 +1241,27 @@
           }
           idx++;
         }
-        if(!merged.length){
-          status.textContent = 'No matches found. Try a different spelling, or skip and set it up manually.';
+        // keep waters and fishing places; residential streets and buildings
+        // are noise, and towns become a "find waters near..." jump-off
+        var waterNameRe = /\b(river|creek|stream|brook|branch|fork|lake|pond|reservoir|bay|sound|gulf|ocean|sea|harbor|harbour|inlet|marsh|flats?|dam|launch|landing|access|ramp|marina|pier|jetty|beach|park|campground)\b/i;
+        var placeTypes = {city:1, town:1, village:1, suburb:1, county:1, municipality:1, state:1};
+        var dropTypes = {street:1, building:1, postcode:1};
+        var cityCandidate = null;
+        var waters = merged.filter(function(r){
+          var nm = r.name || r.address_line1 || r.city || r.formatted || '';
+          if(placeTypes[r.result_type]){
+            if(!cityCandidate) cityCandidate = r;
+            return false;
+          }
+          if(dropTypes[r.result_type]) return false;
+          return waterNameRe.test(nm);
+        });
+        merged = waters;
+        if(!merged.length && !cityCandidate){
+          status.textContent = 'No waters found by that name. Try the river or lake name, or a nearby town.';
           return;
         }
-        status.textContent = 'Pick the closest match:';
+        status.textContent = merged.length ? 'Pick the closest match:' : 'That looks like a town, not a water:';
         merged.forEach(function(r){
           var btn = document.createElement('button');
           btn.className = 'ff-result-item';
@@ -1228,15 +1280,86 @@
               fetchGauge(r.lat, r.lon);
             }
             fetchAccess(r.lat, r.lon);
-            goToStep(1);
+            proceedFromLocation();
           });
           results.appendChild(btn);
         });
+        if(cityCandidate){
+          var c = cityCandidate;
+          var cname = c.name || c.city || c.formatted;
+          var cbtn = document.createElement('button');
+          cbtn.className = 'ff-result-item';
+          cbtn.innerHTML = '<span class="rn">Find waters near ' + cname + ' →</span><span class="rd">Named rivers and lakes within ~10 miles</span>';
+          cbtn.addEventListener('click', function(){
+            nearbyWaters(c.lat, c.lon, cname, c.state, c.country);
+          });
+          results.appendChild(cbtn);
+        }
       }).catch(function(){
         if(reqId === searchSeq){
           status.textContent = 'Search failed. Try again, or skip and set it up manually.';
         }
       });
+  }
+
+  function nearbyWaters(lat, lon, label, stateName, country){
+    var status = document.getElementById('searchStatus');
+    var results = document.getElementById('searchResults');
+    results.innerHTML = '';
+    status.textContent = 'Looking for waters near ' + label + '...';
+    var q = '[out:json][timeout:20];(way["waterway"~"^(river|stream)$"]["name"](around:16000,' + lat + ',' + lon + ');' +
+            'nwr["natural"="water"]["name"](around:16000,' + lat + ',' + lon + '););out center tags 80;';
+    overpassFetch(q).then(function(data){
+      var seen = {};
+      var items = [];
+      (data.elements || []).forEach(function(e){
+        var t = e.tags || {};
+        if(!t.name) return;
+        var elat = e.lat != null ? e.lat : (e.center && e.center.lat);
+        var elon = e.lon != null ? e.lon : (e.center && e.center.lon);
+        if(elat == null) return;
+        var item = {
+          name: t.name,
+          water: t.waterway ? 'river' : (/\bpond\b/i.test(t.name) ? 'pond' : 'lake'),
+          lat: elat, lon: elon,
+          dist: haversineMi(lat, lon, elat, elon)
+        };
+        var key = t.name.toLowerCase();
+        if(seen[key] === undefined){
+          seen[key] = items.length;
+          items.push(item);
+        } else if(items[seen[key]].dist > item.dist){
+          items[seen[key]] = item;
+        }
+      });
+      items.sort(function(a, b){ return a.dist - b.dist; });
+      if(!items.length){
+        status.textContent = 'No named waters mapped near ' + label + '. Try searching the water\'s name directly.';
+        return;
+      }
+      status.textContent = 'Waters near ' + label + ':';
+      items.slice(0, 8).forEach(function(w){
+        var btn = document.createElement('button');
+        btn.className = 'ff-result-item';
+        var kindLabel = w.water === 'river' ? 'River / stream' : (w.water === 'pond' ? 'Pond' : 'Lake');
+        btn.innerHTML = '<span class="rn">' + w.name + '</span><span class="rd">' + kindLabel + ' · ' + w.dist.toFixed(1) + ' mi from ' + label + '</span>';
+        btn.addEventListener('click', function(){
+          state.location = {name:w.name, region:[label, stateName].filter(Boolean).join(', '), state:stateName, lat:w.lat, lon:w.lon, country:country};
+          state.notes = findWaterNotes(w.name, stateName);
+          status.textContent = 'Set: ' + w.name;
+          fetchWeather(w.lat, w.lon, document.getElementById('locateStatus')).catch(function(){});
+          if(country === 'United States'){
+            fetchGauge(w.lat, w.lon);
+          }
+          fetchAccess(w.lat, w.lon);
+          setWater(w.water);
+          goToStep(2);
+        });
+        results.appendChild(btn);
+      });
+    }).catch(function(){
+      status.textContent = 'Couldn\'t search nearby waters right now — try again in a moment.';
+    });
   }
 
   document.getElementById('skipSearch').addEventListener('click', function(){
@@ -1258,11 +1381,7 @@
     });
     setTimeout(function(){
       if(field === 'water'){
-        state.species = null;
-        renderSpeciesOptions();
-        if(value === 'ocean' && state.location){
-          fetchTides(state.location.lat, state.location.lon);
-        }
+        setWater(value);
         goToStep(2);
       } else if(field === 'species'){
         goToStep(3);
@@ -1270,6 +1389,38 @@
         goToStep(4);
       }
     }, 150);
+  }
+
+  function setWater(value){
+    state.water = value;
+    state.species = null;
+    document.querySelectorAll('.ff-opt[data-field="water"]').forEach(function(b){
+      b.classList.toggle('selected', b.dataset.value === value);
+    });
+    renderSpeciesOptions();
+    if(value === 'ocean' && state.location){
+      fetchTides(state.location.lat, state.location.lon);
+    }
+  }
+
+  // guess the water type from the name so we can skip the obvious question
+  function detectWaterType(name){
+    if(/\b(river|creek|stream|brook|branch|fork)\b/i.test(name)) return 'river';
+    if(/\b(lake|reservoir|impoundment|flowage)\b/i.test(name)) return 'lake';
+    if(/\bpond\b/i.test(name)) return 'pond';
+    if(/\b(ocean|sea|sound|gulf|surf)\b/i.test(name)) return 'ocean';
+    return null; // bays/harbors are ambiguous (Great Lakes), launches say nothing
+  }
+
+  // after picking a location: skip the water-type step when the name gives it away
+  function proceedFromLocation(){
+    var detected = state.location && detectWaterType(state.location.name);
+    if(detected){
+      setWater(detected);
+      goToStep(2);
+    } else {
+      goToStep(1);
+    }
   }
 
   document.querySelectorAll('.ff-chip').forEach(function(btn){
@@ -1891,7 +2042,7 @@
     fetchWeather(lat, lon, document.getElementById('locateStatus')).catch(function(){});
     fetchGauge(lat, lon);
     fetchAccess(lat, lon);
-    goToStep(1);
+    proceedFromLocation();
   }
 
   function fishHerePopup(title, sub, lat, lon, stateName, notes){
