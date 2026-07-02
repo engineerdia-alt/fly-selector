@@ -1,0 +1,6 @@
+name = "fly-refine"
+main = "fly-refine.js"
+compatibility_date = "2026-06-01"
+routes = [
+  { pattern = "api.flyfishingfinder.com", custom_domain = true }
+]
