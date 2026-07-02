@@ -623,7 +623,8 @@
     }).catch(function(){});
   }
 
-  var featureLabels = {STM:'River / stream', LK:'Lake', RSV:'Reservoir', BAY:'Bay', SEA:'Sea', GULF:'Gulf', CNL:'Canal', PND:'Pond'};
+  var GEOAPIFY_KEY = '714aba9f92134abdb5840cba44fda0dd';
+  var featureLabels = {city:'City', town:'Town', village:'Village', county:'County', state:'State / region', country:'Country', street:'Street', building:'Building', amenity:'Place', natural:'Natural feature', postcode:'Postcode'};
 
   document.getElementById('searchBtn').addEventListener('click', doSearch);
   document.getElementById('searchInput').addEventListener('keydown', function(e){
@@ -637,7 +638,7 @@
     results.innerHTML = '';
     if(!q){ status.textContent = 'Type a name to search.'; return; }
     status.textContent = 'Searching...';
-    fetch('https://geocoding-api.open-meteo.com/v1/search?name=' + encodeURIComponent(q) + '&count=6&language=en&format=json')
+    fetch('https://api.geoapify.com/v1/geocode/autocomplete?text=' + encodeURIComponent(q) + '&limit=6&format=json&apiKey=' + GEOAPIFY_KEY)
       .then(function(r){ return r.json(); })
       .then(function(data){
         if(!data.results || !data.results.length){
@@ -648,17 +649,18 @@
         data.results.forEach(function(r){
           var btn = document.createElement('button');
           btn.className = 'ff-result-item';
-          var label = featureLabels[r.feature_code] || 'Place';
-          var region = [r.admin1, r.country].filter(Boolean).join(', ');
-          btn.innerHTML = '<span class="rn">' + r.name + '</span><span class="rd">' + label + (region ? ' \u00b7 ' + region : '') + '</span>';
+          var name = r.name || r.address_line1 || r.city || r.formatted;
+          var label = featureLabels[r.result_type] || 'Place';
+          var region = [r.city || r.county, r.state, r.country].filter(Boolean).join(', ');
+          btn.innerHTML = '<span class="rn">' + name + '</span><span class="rd">' + label + (region ? ' \u00b7 ' + region : '') + '</span>';
           btn.addEventListener('click', function(){
-            state.location = {name:r.name, region:region, lat:r.latitude, lon:r.longitude, country:r.country};
-            status.textContent = 'Loading conditions for ' + r.name + '...';
-            fetchWeather(r.latitude, r.longitude, document.getElementById('locateStatus')).then(function(){
-              status.textContent = 'Set: ' + r.name;
+            state.location = {name:name, region:region, lat:r.lat, lon:r.lon, country:r.country};
+            status.textContent = 'Loading conditions for ' + name + '...';
+            fetchWeather(r.lat, r.lon, document.getElementById('locateStatus')).then(function(){
+              status.textContent = 'Set: ' + name;
             });
             if(r.country === 'United States'){
-              fetchGauge(r.latitude, r.longitude);
+              fetchGauge(r.lat, r.lon);
             }
             goToStep(1);
           });
