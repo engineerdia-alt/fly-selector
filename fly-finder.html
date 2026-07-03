@@ -492,6 +492,35 @@
     margin:0 8px 0 0;
     cursor:pointer;
   }
+  .ff-md-p{
+    font-size:13px;
+    line-height:1.55;
+    color:var(--ink);
+    margin:0 0 8px;
+  }
+  .ff-md-p:last-child{margin-bottom:0;}
+  .ff-md-list{
+    margin:0 0 8px;
+    padding-left:18px;
+  }
+  .ff-md-list li{
+    font-size:13px;
+    line-height:1.55;
+    color:var(--ink);
+    margin:0 0 4px;
+  }
+  .ff-ask-q{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--moss);
+    margin:12px 0 6px;
+  }
+  .ff-ask-q:first-child{margin-top:0;}
+  .ff-ask-a{
+    border-left:2px solid var(--parchment-dim);
+    padding-left:10px;
+    margin:0 0 4px;
+  }
   .ff-trip-note{
     width:100%;
     box-sizing:border-box;
@@ -1574,6 +1603,7 @@
   // exact section; refine the species list and stash the AI read
   function refineLocation(water){
     state.aiRefine = null;
+    state.askChat = [];
     if(!REFINE_URLS.length || !state.location || state.location.lat == null) return;
     var loc = state.location;
     var payload = JSON.stringify({
@@ -2088,9 +2118,9 @@
     html += '</div>';
 
     if(state.aiRefine && state.aiRefine.read){
-      var aiBody = state.aiRefine.read +
-        (state.aiRefine.regs ? ' <strong>Regulations:</strong> ' + state.aiRefine.regs : '');
-      html += '<div class="ff-info-card"><p class="ff-info-label">This stretch (AI read — verify independently)</p><p class="ff-info-body">' + aiBody + '</p></div>';
+      var aiBody = mdLite(state.aiRefine.read) +
+        (state.aiRefine.regs ? '<p class="ff-md-p"><strong>Regulations:</strong> ' + escapeHtml(state.aiRefine.regs) + '</p>' : '');
+      html += '<div class="ff-info-card"><p class="ff-info-label">This stretch (AI read — verify independently)</p>' + aiBody + '</div>';
     }
 
     if((state.species === 'trout' || state.species === 'steelhead') && state.gauge && state.gauge.waterTempF != null && state.gauge.waterTempF >= 68){
@@ -2189,9 +2219,10 @@
 
     if(REFINE_URLS.length){
       html += '<div class="ff-info-card"><p class="ff-info-label">Ask the guide</p>' +
+        '<div id="askThread"></div>' +
         '<textarea class="ff-trip-note" id="askInput" placeholder="e.g. It feels like 105° out — is it even worth fishing today? Where should I wade?"></textarea>' +
         '<button class="ff-mini-btn" id="askBtn" type="button">Ask</button>' +
-        '<p class="ff-info-body" id="askAnswer"></p></div>';
+        '<p class="ff-spark-cap" id="askStatus"></p></div>';
     }
 
     html += '<div class="ff-info-card"><p class="ff-info-label">Gear for today</p><dl class="ff-gear-grid">';
@@ -2239,11 +2270,29 @@
     });
     var askBtn = document.getElementById('askBtn');
     if(askBtn){
+      if(!state.askChat) state.askChat = [];
+      var renderAskThread = function(){
+        var thread = document.getElementById('askThread');
+        var h = '';
+        state.askChat.forEach(function(m){
+          if(m.role === 'user'){
+            h += '<p class="ff-ask-q">You: ' + escapeHtml(m.content) + '</p>';
+          } else {
+            h += '<div class="ff-ask-a">' + mdLite(m.content) + '</div>';
+          }
+        });
+        thread.innerHTML = h;
+      };
+      renderAskThread();
       askBtn.addEventListener('click', function(){
-        var q = document.getElementById('askInput').value.trim();
-        var out = document.getElementById('askAnswer');
+        var input = document.getElementById('askInput');
+        var statusEl = document.getElementById('askStatus');
+        var q = input.value.trim();
         if(!q) return;
-        out.textContent = 'Asking the guide...';
+        state.askChat.push({role: 'user', content: q});
+        renderAskThread();
+        input.value = '';
+        statusEl.textContent = 'The guide is thinking...';
         askBtn.disabled = true;
         var g = state.gauge || {};
         var ctx = {
@@ -2257,20 +2306,25 @@
         };
         (function attempt(i){
           if(i >= REFINE_URLS.length){
-            out.textContent = 'Couldn\'t reach the guide — try again in a minute.';
+            statusEl.textContent = 'Couldn\'t reach the guide — try again in a minute.';
+            state.askChat.pop(); // let them resend the same question
+            renderAskThread();
             askBtn.disabled = false;
             return;
           }
           fetch(REFINE_URLS[i] + '/ask', {
             method: 'POST',
             headers: {'Content-Type': 'application/json'},
-            body: JSON.stringify({question: q, context: ctx})
+            body: JSON.stringify({messages: state.askChat, context: ctx})
           }).then(function(r){
             if(!r.ok) throw new Error('bad status');
             return r.json();
           }).then(function(d){
-            out.textContent = d.answer || 'No answer came back — try rewording.';
+            state.askChat.push({role: 'assistant', content: d.answer || 'No answer came back — try rewording.'});
+            renderAskThread();
+            statusEl.textContent = '';
             askBtn.disabled = false;
+            input.focus();
           }).catch(function(){ attempt(i + 1); });
         })(0);
       });
@@ -2341,6 +2395,31 @@
         results.appendChild(div);
       });
     }
+  }
+
+  function escapeHtml(s){
+    return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  }
+
+  // minimal markdown for AI answers: **bold**, "-" bullets, paragraphs
+  function mdLite(s){
+    var out = escapeHtml(s)
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+    var lines = out.split(/\n/);
+    var html = '', inList = false;
+    lines.forEach(function(l){
+      var m = l.match(/^\s*[-•]\s+(.*)/);
+      if(m){
+        if(!inList){ html += '<ul class="ff-md-list">'; inList = true; }
+        html += '<li>' + m[1] + '</li>';
+      } else {
+        if(inList){ html += '</ul>'; inList = false; }
+        if(l.trim()) html += '<p class="ff-md-p">' + l + '</p>';
+      }
+    });
+    if(inList) html += '</ul>';
+    return html || '<p class="ff-md-p">' + out + '</p>';
   }
 
   function sparklineSvg(vals){

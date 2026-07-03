@@ -1,9 +1,11 @@
 // Fly Finder refinement worker.
-// Holds the Anthropic API key server-side and answers one question per
-// location pick: which candidate species realistically live in this exact
-// stretch of water, plus a short section-specific read.
-// Valid responses are cached for 7 days per water; errors are never cached.
-// GET /diag runs a tiny end-to-end test of the Anthropic call.
+// Holds the Anthropic API key server-side. Routes:
+//   POST /      — which candidate species live in this exact stretch + a short read
+//   POST /ask   — conversational guide Q&A with follow-ups (message history)
+//   GET  /diag  — end-to-end test of the Anthropic call
+// Static instructions live in cached system blocks (prompt caching kicks in
+// automatically once the prefix passes the model's minimum cacheable size).
+// Valid refine responses are edge-cached 7 days; errors are never cached.
 
 const ALLOWED_ORIGINS = [
   'https://engineerdia-alt.github.io',
@@ -12,7 +14,32 @@ const ALLOWED_ORIGINS = [
 
 const MODEL = 'claude-haiku-4-5-20251001';
 
-async function callAnthropic(env, prompt, maxTokens) {
+const REFINE_SYSTEM =
+  'You are a fly fishing expert with detailed knowledge of North American fisheries. ' +
+  'The user gives you an exact spot (name, coordinates, state, water type) and a list of candidate species keys. ' +
+  'Think about that SPECIFIC section — dams, temperature regime, gradient — not the river in general. ' +
+  'Reply with STRICT JSON only, no prose before or after: ' +
+  '{"species": [subset of the candidate keys that realistically occur and are worth targeting in this exact section], ' +
+  '"read": "2-3 sentences of section-specific local knowledge: what actually swims here, the character of this stretch, honest expectations", ' +
+  '"regs": "one sentence on special regulations likely to apply here, or an empty string if none come to mind"}';
+
+const GUIDE_SYSTEM =
+  'You are a seasoned, safety-conscious fly fishing guide chatting with an angler about a specific outing. ' +
+  'Ground every answer in the conditions context you are given. Be practical and honest. ' +
+  'If heat or water temperature makes fishing harmful to the fish (e.g. trout in water over 68F) or risky for the angler, ' +
+  'say so plainly and suggest concrete alternatives (other species, dawn/dusk, another day). ' +
+  'Keep answers under 150 words. Format for a small card: short paragraphs, "-" bullets when listing options or steps, ' +
+  'and **bold** for the key numbers or the bottom-line verdict.';
+
+async function callAnthropic(env, opts) {
+  const payload = {
+    model: MODEL,
+    max_tokens: opts.maxTokens,
+    messages: opts.messages
+  };
+  if (opts.system) {
+    payload.system = [{ type: 'text', text: opts.system, cache_control: { type: 'ephemeral' } }];
+  }
   const resp = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
     headers: {
@@ -20,14 +47,14 @@ async function callAnthropic(env, prompt, maxTokens) {
       'anthropic-version': '2023-06-01',
       'content-type': 'application/json'
     },
-    body: JSON.stringify({
-      model: MODEL,
-      max_tokens: maxTokens,
-      messages: [{ role: 'user', content: prompt }]
-    })
+    body: JSON.stringify(payload)
   });
   const body = await resp.json().catch(() => ({}));
   return { status: resp.status, ok: resp.ok, body };
+}
+
+function textOf(r) {
+  return (r.body.content && r.body.content[0] && r.body.content[0].text) || '';
 }
 
 export default {
@@ -45,9 +72,9 @@ export default {
       if (!env.ANTHROPIC_API_KEY) {
         return new Response('DIAG FAIL: ANTHROPIC_API_KEY secret is not set', { status: 500, headers: cors });
       }
-      const r = await callAnthropic(env, 'Reply with exactly: ok', 10);
+      const r = await callAnthropic(env, { messages: [{ role: 'user', content: 'Reply with exactly: ok' }], maxTokens: 10 });
       const detail = r.ok
-        ? 'DIAG OK — model ' + MODEL + ' replied: ' + JSON.stringify((r.body.content || [{}])[0].text || '')
+        ? 'DIAG OK — model ' + MODEL + ' replied: ' + JSON.stringify(textOf(r))
         : 'DIAG FAIL — Anthropic returned HTTP ' + r.status + ': ' + JSON.stringify(r.body.error || r.body).slice(0, 300);
       return new Response(detail, { status: r.ok ? 200 : 502, headers: cors });
     }
@@ -60,26 +87,33 @@ export default {
     }
 
     if (url.pathname === '/ask') {
-      const question = (body.question || '').slice(0, 500);
-      if (!question) return new Response('missing question', { status: 400, headers: cors });
+      let msgs = Array.isArray(body.messages)
+        ? body.messages
+        : (body.question ? [{ role: 'user', content: body.question }] : []);
+      msgs = msgs.slice(-8).map(function (m) {
+        return {
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: String(m.content || '').slice(0, 600)
+        };
+      }).filter(function (m) { return m.content; });
+      if (!msgs.length || msgs[msgs.length - 1].role !== 'user') {
+        return new Response('missing question', { status: 400, headers: cors });
+      }
       const ctx = JSON.stringify(body.context || {}).slice(0, 1500);
-      const askPrompt =
-        'You are a seasoned, safety-conscious fly fishing guide. Current conditions for the angler: ' + ctx + '. ' +
-        'The angler asks: "' + question.replace(/"/g, "'") + '". ' +
-        'Answer in under 120 words, practical and honest, grounded in the conditions given. ' +
-        'If heat or water temperature makes fishing harmful to the fish (e.g. trout in water over 68F) or risky ' +
-        'for the angler, say so plainly and suggest concrete alternatives (other species, dawn/dusk, another day).';
-      const ar = await callAnthropic(env, askPrompt, 350);
+      // context rides in the first user turn so the system block stays
+      // identical across spots and stays cache-friendly
+      msgs[0] = { role: msgs[0].role, content: 'Conditions context: ' + ctx + '\n\n' + msgs[0].content };
+      const ar = await callAnthropic(env, { system: GUIDE_SYSTEM, messages: msgs, maxTokens: 400 });
       if (!ar.ok) {
         return new Response(JSON.stringify({ error: 'anthropic ' + ar.status }), {
           status: 502, headers: { ...cors, 'Content-Type': 'application/json' }
         });
       }
-      const answer = (ar.body.content && ar.body.content[0] && ar.body.content[0].text) || '';
-      return new Response(JSON.stringify({ answer: answer }), {
+      return new Response(JSON.stringify({ answer: textOf(ar) }), {
         headers: { ...cors, 'Content-Type': 'application/json' }
       });
     }
+
     const { name, state, lat, lon, water, candidates } = body || {};
     if (!name || typeof lat !== 'number' || typeof lon !== 'number') {
       return new Response('missing fields', { status: 400, headers: cors });
@@ -96,25 +130,19 @@ export default {
       return cached;
     }
 
-    const prompt =
-      'You are a fly fishing expert with detailed knowledge of North American fisheries. ' +
-      'The angler picked this exact spot: "' + name + '" at ' + lat.toFixed(4) + ',' + lon.toFixed(4) +
+    const userMsg =
+      'Spot: "' + name + '" at ' + lat.toFixed(4) + ',' + lon.toFixed(4) +
       (state ? ' in ' + state : '') + (water ? ' (' + water + ' water)' : '') + '. ' +
-      'Candidate species keys: ' + (candidates || []).join(', ') + '. ' +
-      'Think about this SPECIFIC section (dams, temperature regime, gradient), not the river in general. ' +
-      'Reply with STRICT JSON only, no prose before or after: ' +
-      '{"species": [subset of the candidate keys that realistically occur and are worth targeting in this exact section], ' +
-      '"read": "2-3 sentences of section-specific local knowledge: what actually swims here, the character of this stretch, honest expectations", ' +
-      '"regs": "one sentence on special regulations likely to apply here, or an empty string if none come to mind"}';
+      'Candidate species keys: ' + (candidates || []).join(', ') + '.';
 
-    const r = await callAnthropic(env, prompt, 400);
+    const r = await callAnthropic(env, { system: REFINE_SYSTEM, messages: [{ role: 'user', content: userMsg }], maxTokens: 400 });
     if (!r.ok) {
       return new Response(JSON.stringify({ error: 'anthropic ' + r.status, detail: r.body.error }), {
         status: 502, headers: { ...cors, 'Content-Type': 'application/json' }
       });
     }
 
-    let text = (r.body.content && r.body.content[0] && r.body.content[0].text) || '';
+    const text = textOf(r);
     const jsonMatch = text.match(/\{[\s\S]*\}/);
     let parsed = null;
     if (jsonMatch) {
