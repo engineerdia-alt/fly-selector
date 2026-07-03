@@ -58,6 +58,28 @@ export default {
     try { body = await request.json(); } catch (e) {
       return new Response('bad json', { status: 400, headers: cors });
     }
+
+    if (url.pathname === '/ask') {
+      const question = (body.question || '').slice(0, 500);
+      if (!question) return new Response('missing question', { status: 400, headers: cors });
+      const ctx = JSON.stringify(body.context || {}).slice(0, 1500);
+      const askPrompt =
+        'You are a seasoned, safety-conscious fly fishing guide. Current conditions for the angler: ' + ctx + '. ' +
+        'The angler asks: "' + question.replace(/"/g, "'") + '". ' +
+        'Answer in under 120 words, practical and honest, grounded in the conditions given. ' +
+        'If heat or water temperature makes fishing harmful to the fish (e.g. trout in water over 68F) or risky ' +
+        'for the angler, say so plainly and suggest concrete alternatives (other species, dawn/dusk, another day).';
+      const ar = await callAnthropic(env, askPrompt, 350);
+      if (!ar.ok) {
+        return new Response(JSON.stringify({ error: 'anthropic ' + ar.status }), {
+          status: 502, headers: { ...cors, 'Content-Type': 'application/json' }
+        });
+      }
+      const answer = (ar.body.content && ar.body.content[0] && ar.body.content[0].text) || '';
+      return new Response(JSON.stringify({ answer: answer }), {
+        headers: { ...cors, 'Content-Type': 'application/json' }
+      });
+    }
     const { name, state, lat, lon, water, candidates } = body || {};
     if (!name || typeof lat !== 'number' || typeof lon !== 'number') {
       return new Response('missing fields', { status: 400, headers: cors });

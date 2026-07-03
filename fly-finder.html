@@ -2093,6 +2093,10 @@
       html += '<div class="ff-info-card"><p class="ff-info-label">This stretch (AI read — verify independently)</p><p class="ff-info-body">' + aiBody + '</p></div>';
     }
 
+    if((state.species === 'trout' || state.species === 'steelhead') && state.gauge && state.gauge.waterTempF != null && state.gauge.waterTempF >= 68){
+      html += '<div class="ff-info-card"><p class="ff-info-label">Heads up — warm water</p><p class="ff-info-body">The nearby gauge reads ' + state.gauge.waterTempF + '°F. Above 68°F, trout fight to exhaustion and often die even when released carefully. Fish dawn when the water is coolest, switch to warm-water species like bass or carp, or save this water for a cooler day.</p></div>';
+    }
+
     if(state.notes){
       var n = state.notes;
       html += '<div class="ff-info-card"><p class="ff-info-label">Local knowledge — ' + n.name + '</p>' +
@@ -2183,6 +2187,13 @@
       html += '<div class="ff-info-card"><p class="ff-info-label">Wind</p><p class="ff-info-body">' + wind + '</p></div>';
     }
 
+    if(REFINE_URLS.length){
+      html += '<div class="ff-info-card"><p class="ff-info-label">Ask the guide</p>' +
+        '<textarea class="ff-trip-note" id="askInput" placeholder="e.g. It feels like 105° out — is it even worth fishing today? Where should I wade?"></textarea>' +
+        '<button class="ff-mini-btn" id="askBtn" type="button">Ask</button>' +
+        '<p class="ff-info-body" id="askAnswer"></p></div>';
+    }
+
     html += '<div class="ff-info-card"><p class="ff-info-label">Gear for today</p><dl class="ff-gear-grid">';
     html += '<div class="ff-gear-item"><dt>Rod</dt><dd>' + gear.rod + '</dd></div>';
     html += '<div class="ff-gear-item"><dt>Reel</dt><dd>' + gear.reel + '</dd></div>';
@@ -2226,6 +2237,44 @@
       var form = document.getElementById('tripForm');
       form.style.display = form.style.display === 'none' ? 'block' : 'none';
     });
+    var askBtn = document.getElementById('askBtn');
+    if(askBtn){
+      askBtn.addEventListener('click', function(){
+        var q = document.getElementById('askInput').value.trim();
+        var out = document.getElementById('askAnswer');
+        if(!q) return;
+        out.textContent = 'Asking the guide...';
+        askBtn.disabled = true;
+        var g = state.gauge || {};
+        var ctx = {
+          spot: state.location && state.location.name,
+          state: state.location && state.location.state,
+          water: state.water, species: state.species,
+          month: new Date().toLocaleString('en', {month: 'long'}),
+          airTemp: state.temp, sky: state.sky, wind: state.windSpeed,
+          flowCfs: g.flow, flowTrend: g.trend, waterTempF: g.waterTempF,
+          tide: state.tide && state.tide.direction
+        };
+        (function attempt(i){
+          if(i >= REFINE_URLS.length){
+            out.textContent = 'Couldn\'t reach the guide — try again in a minute.';
+            askBtn.disabled = false;
+            return;
+          }
+          fetch(REFINE_URLS[i] + '/ask', {
+            method: 'POST',
+            headers: {'Content-Type': 'application/json'},
+            body: JSON.stringify({question: q, context: ctx})
+          }).then(function(r){
+            if(!r.ok) throw new Error('bad status');
+            return r.json();
+          }).then(function(d){
+            out.textContent = d.answer || 'No answer came back — try rewording.';
+            askBtn.disabled = false;
+          }).catch(function(){ attempt(i + 1); });
+        })(0);
+      });
+    }
     document.getElementById('tripSaveBtn').addEventListener('click', function(){
       var entries = loadList('ffJournal');
       entries.unshift({
