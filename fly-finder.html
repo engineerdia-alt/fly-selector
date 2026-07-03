@@ -2806,6 +2806,27 @@
     });
     document.querySelector('.ff-step[data-step="0"]').appendChild(btn);
   })();
+
+  // when embedded in an iframe (e.g. the Shopify store), post our height to
+  // the parent so it can grow the frame instead of showing an inner scrollbar
+  (function embedResize(){
+    if(window.parent === window) return;
+    var last = 0;
+    function post(){
+      var h = document.documentElement.scrollHeight;
+      if(Math.abs(h - last) > 2){
+        last = h;
+        window.parent.postMessage({ffHeight: h}, '*');
+      }
+    }
+    window.addEventListener('load', post);
+    window.addEventListener('resize', post);
+    if(window.MutationObserver){
+      new MutationObserver(post).observe(document.body, {subtree:true, childList:true, attributes:true});
+    }
+    setInterval(post, 1000);
+    post();
+  })();
 })();
 </script>
 </body>
