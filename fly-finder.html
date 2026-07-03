@@ -492,6 +492,27 @@
     margin:0 8px 0 0;
     cursor:pointer;
   }
+  .ff-intro-ai{
+    background:var(--parchment-dim);
+    border-radius:12px;
+    padding:16px;
+    margin-bottom:22px;
+  }
+  .ff-intro-hint{
+    font-size:13px;
+    line-height:1.5;
+    color:var(--ink-soft);
+    margin:0 0 12px;
+  }
+  .ff-intro-or{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    text-transform:uppercase;
+    letter-spacing:0.06em;
+    color:var(--ink-soft);
+    text-align:center;
+    margin:14px 0 0;
+  }
   .ff-md-p{
     font-size:13px;
     line-height:1.55;
@@ -594,6 +615,17 @@
   </div>
 
   <div class="ff-step active" data-step="0">
+    <div class="ff-intro-ai" id="introAi" style="display:none">
+      <p class="ff-q">Ask, and skip the quiz</p>
+      <p class="ff-intro-hint">Tell me where and what you're after — "smallmouth near Ann Arbor this weekend" — and I'll pull the conditions, access points, map, and flies straight away.</p>
+      <div id="planThread"></div>
+      <div class="ff-search-row">
+        <input class="ff-search-input" id="planInput" type="text" placeholder="Where do you want to fish, and for what?">
+        <button class="ff-search-btn" id="planBtn" type="button">Ask</button>
+      </div>
+      <p class="ff-search-status" id="planStatus"></p>
+      <p class="ff-intro-or">or search by name</p>
+    </div>
     <p class="ff-q">Search for your water</p>
     <div class="ff-search-row">
       <input class="ff-search-input" id="searchInput" type="text" placeholder="e.g. Huron River, Belleville Lake, Cape Cod">
@@ -1557,6 +1589,132 @@
     });
   }
 
+  // programmatic geocode for the AI planner: reuse the search machinery and
+  // return the best water (or a town) for a plain place name
+  function geocodeWater(name){
+    return Promise.all(queryVariants(name).map(function(v){
+      return fetch('https://api.geoapify.com/v1/geocode/autocomplete?text=' + encodeURIComponent(v) + '&limit=6&format=json' + (ipBias ? '&bias=proximity:' + ipBias : '') + '&apiKey=' + GEOAPIFY_KEY)
+        .then(function(r){ return r.json(); }).catch(function(){ return {}; });
+    })).then(function(datas){
+      var merged = [], seen = {};
+      datas.forEach(function(d){
+        (d.results || []).forEach(function(c){
+          var k = c.place_id || c.formatted;
+          if(!seen[k]){ seen[k] = 1; merged.push(c); }
+        });
+      });
+      var sp = splitWaters(merged);
+      if(sp.waters.length) return {type:'water', r:sp.waters[0]};
+      return fetch('https://api.geoapify.com/v1/geocode/search?text=' + encodeURIComponent(name) + '&limit=6&format=json' + (ipBias ? '&bias=proximity:' + ipBias : '') + '&apiKey=' + GEOAPIFY_KEY)
+        .then(function(r){ return r.json(); }).then(function(d){
+          var sp2 = splitWaters(d.results || []);
+          if(sp2.waters.length) return {type:'water', r:sp2.waters[0]};
+          if(sp2.city) return {type:'city', r:sp2.city};
+          return sp.city ? {type:'city', r:sp.city} : null;
+        }).catch(function(){ return sp.city ? {type:'city', r:sp.city} : null; });
+    });
+  }
+
+  // take the AI planner's structured result and drive the existing pipeline
+  function runPlan(plan){
+    var statusEl = document.getElementById('planStatus');
+    statusEl.textContent = 'Finding ' + plan.place + '…';
+    geocodeWater(plan.place).then(function(hit){
+      if(!hit){
+        statusEl.textContent = 'Couldn\'t place "' + plan.place + '". Try the water or a nearby town in the search box below.';
+        return;
+      }
+      var r = hit.r;
+      var name = r.name || r.address_line1 || r.city || r.formatted;
+      var region = [r.city || r.county, r.state, r.country].filter(Boolean).join(', ');
+      // a town result: hand off to the nearby-waters finder
+      if(hit.type === 'city'){
+        statusEl.textContent = '';
+        nearbyWaters(r.lat, r.lon, name, r.state, r.country);
+        return;
+      }
+      state.location = {name:name, region:region, state:r.state, lat:r.lat, lon:r.lon, country:r.country};
+      state.notes = findWaterNotes(name, r.state);
+      var wx = fetchWeather(r.lat, r.lon, document.getElementById('locateStatus'));
+      if(r.country === 'United States') fetchGauge(r.lat, r.lon);
+      fetchAccess(r.lat, r.lon);
+      var water = plan.water || detectWaterType(name);
+      if(!water){ statusEl.textContent = ''; goToStep(1); return; }
+      setWater(water);
+      var candidates = speciesByWater[water] || [];
+      if(plan.species && candidates.indexOf(plan.species) !== -1){
+        state.species = plan.species;
+        var validMethods = {shore:1, wading:1, boat:1, kayak:1};
+        state.method = validMethods[plan.method] ? plan.method : (water === 'river' ? 'wading' : 'shore');
+        statusEl.textContent = 'Pulling conditions and flies for ' + name + '…';
+        wx.then(function(){
+          statusEl.textContent = '';
+          if(state.temp && state.sky && state.windSpeed){ renderResult(); goToStep(5); }
+          else { goToStep(4); }
+        }).catch(function(){ statusEl.textContent = ''; goToStep(4); });
+      } else {
+        statusEl.textContent = '';
+        goToStep(2); // everything set except species — let them pick
+      }
+    }).catch(function(){
+      statusEl.textContent = 'Something went wrong — try the search box below.';
+    });
+  }
+
+  var planChat = [];
+  function renderPlanThread(){
+    var t = document.getElementById('planThread');
+    if(!t) return;
+    var h = '';
+    planChat.forEach(function(m){
+      if(m.role === 'user') h += '<p class="ff-ask-q">You: ' + escapeHtml(m.content) + '</p>';
+      else h += '<div class="ff-ask-a">' + mdLite(m.content) + '</div>';
+    });
+    t.innerHTML = h;
+  }
+  function sendPlan(){
+    var input = document.getElementById('planInput');
+    var statusEl = document.getElementById('planStatus');
+    var planBtn = document.getElementById('planBtn');
+    var q = input.value.trim();
+    if(!q) return;
+    planChat.push({role:'user', content:q});
+    renderPlanThread();
+    input.value = '';
+    statusEl.textContent = 'Thinking…';
+    planBtn.disabled = true;
+    (function attempt(i){
+      if(i >= REFINE_URLS.length){
+        statusEl.textContent = 'Couldn\'t reach the planner — use the search box below.';
+        planChat.pop();
+        renderPlanThread();
+        planBtn.disabled = false;
+        return;
+      }
+      fetch(REFINE_URLS[i] + '/plan', {
+        method: 'POST',
+        headers: {'Content-Type': 'application/json'},
+        body: JSON.stringify({messages: planChat})
+      }).then(function(r){
+        if(!r.ok) throw new Error('bad status');
+        return r.json();
+      }).then(function(plan){
+        if(plan.reply){ planChat.push({role:'assistant', content:plan.reply}); renderPlanThread(); }
+        planBtn.disabled = false;
+        statusEl.textContent = '';
+        if(plan.ready && plan.place){ runPlan(plan); }
+        else { input.focus(); }
+      }).catch(function(){ attempt(i + 1); });
+    })(0);
+  }
+  if(REFINE_URLS.length){
+    document.getElementById('introAi').style.display = '';
+    document.getElementById('planBtn').addEventListener('click', sendPlan);
+    document.getElementById('planInput').addEventListener('keydown', function(e){
+      if(e.key === 'Enter') sendPlan();
+    });
+  }
+
   document.getElementById('skipSearch').addEventListener('click', function(){
     goToStep(1);
   });
@@ -1697,6 +1855,9 @@
     document.getElementById('searchStatus').textContent = '';
     document.getElementById('searchResults').innerHTML = '';
     document.getElementById('searchInput').value = '';
+    planChat = [];
+    renderPlanThread();
+    document.getElementById('planStatus').textContent = '';
     updateMySpotsBtn();
     goToStep(0);
   });

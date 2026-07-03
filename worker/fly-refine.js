@@ -23,6 +23,23 @@ const REFINE_SYSTEM =
   '"read": "2-3 sentences of section-specific local knowledge: what actually swims here, the character of this stretch, honest expectations", ' +
   '"regs": "one sentence on special regulations likely to apply here, or an empty string if none come to mind"}';
 
+const PLAN_SYSTEM =
+  'You are the friendly front desk of a fly fishing planning app. An angler types a free-form request ' +
+  '(e.g. "where can I catch smallmouth near Ann Arbor this weekend?"). Your job is to figure out WHERE they want ' +
+  'to fish and, if mentioned, what species, how they are fishing, and the water type — then hand off to the app, ' +
+  'which will pull weather, nearby access points, a map, and fly recommendations for that spot. ' +
+  'Valid species keys: trout, bass, pike, panfish, carp, steelhead, striper, bluefish, albie, redfish. ' +
+  'Valid water: river, lake, pond, ocean. Valid method: shore, wading, boat, kayak. ' +
+  'Reply with STRICT JSON only, no prose outside it: ' +
+  '{"reply": "one or two friendly sentences to the angler", ' +
+  '"ready": true only once you have a usable place (a named water OR a town/city), else false, ' +
+  '"place": "the most specific water or town named, exactly as an app map search would want it, or null", ' +
+  '"species": one valid species key if clearly implied else null, ' +
+  '"method": one valid method if stated else null, ' +
+  '"water": one valid water type if clear from the place or words else null}. ' +
+  'If they gave no location, set ready=false and ask a short friendly question for the place. ' +
+  'Never invent a place they did not mention.';
+
 const GUIDE_SYSTEM =
   'You are a seasoned, safety-conscious fly fishing guide chatting with an angler about a specific outing. ' +
   'Ground every answer in the conditions context you are given. Be practical and honest. ' +
@@ -84,6 +101,37 @@ export default {
     let body;
     try { body = await request.json(); } catch (e) {
       return new Response('bad json', { status: 400, headers: cors });
+    }
+
+    if (url.pathname === '/plan') {
+      let msgs = Array.isArray(body.messages) ? body.messages : [];
+      msgs = msgs.slice(-8).map(function (m) {
+        return {
+          role: m.role === 'assistant' ? 'assistant' : 'user',
+          content: String(m.content || '').slice(0, 600)
+        };
+      }).filter(function (m) { return m.content; });
+      if (!msgs.length || msgs[msgs.length - 1].role !== 'user') {
+        return new Response('missing message', { status: 400, headers: cors });
+      }
+      const pr = await callAnthropic(env, { system: PLAN_SYSTEM, messages: msgs, maxTokens: 300 });
+      if (!pr.ok) {
+        return new Response(JSON.stringify({ error: 'anthropic ' + pr.status }), {
+          status: 502, headers: { ...cors, 'Content-Type': 'application/json' }
+        });
+      }
+      const ptext = textOf(pr);
+      const pmatch = ptext.match(/\{[\s\S]*\}/);
+      let plan = null;
+      if (pmatch) { try { plan = JSON.parse(pmatch[0]); } catch (e) { plan = null; } }
+      if (!plan || typeof plan.reply !== 'string') {
+        return new Response(JSON.stringify({ reply: 'Tell me a river, lake, or town and what you\'re after.', ready: false }), {
+          headers: { ...cors, 'Content-Type': 'application/json' }
+        });
+      }
+      return new Response(JSON.stringify(plan), {
+        headers: { ...cors, 'Content-Type': 'application/json' }
+      });
     }
 
     if (url.pathname === '/ask') {
