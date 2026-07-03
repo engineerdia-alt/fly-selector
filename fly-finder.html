@@ -1444,7 +1444,7 @@
           }
           idx++;
         }
-        var sp = splitWaters(merged);
+        var sp = splitWaters(merged, q);
         if(!sp.waters.length && !sp.city){
           // autocomplete misses named regions like "Cape Cod";
           // the full-text search endpoint knows them — rescue query
@@ -1452,7 +1452,7 @@
             .then(function(r){ return r.json(); })
             .then(function(d){
               if(reqId !== searchSeq) return;
-              renderWaters(splitWaters(d.results || []));
+              renderWaters(splitWaters(d.results || [], q));
             }).catch(function(){
               if(reqId === searchSeq) renderWaters(sp);
             });
@@ -1513,7 +1513,24 @@
   // are noise, and towns become a "find waters near..." jump-off
   var waterNameRe = /\b(river|creek|stream|brook|branch|fork|lake|pond|reservoir|bay|sound|gulf|ocean|sea|harbor|harbour|inlet|marsh|flats?|dam|launch|landing|access|ramp|marina|pier|jetty|beach|cape|cove|point|island|isle|keys?|strait|channel|lagoon|estuary|bayou|slough|falls?|rapids?|springs?|narrows|shoals?|coast|shore|shoreline|surf|park|metroparks?|preserve|refuge|recreation|campground|forest)\b/i;
 
-  function splitWaters(list){
+  // rank the true water feature above places merely named after it
+  // ("Huron River" over "Huron River Hills" or "Huron River Drive")
+  function waterScore(r, q){
+    var name = (r.name || r.address_line1 || r.formatted || '').toLowerCase().trim();
+    var query = (q || '').toLowerCase().split(',')[0].trim();
+    var score = 0;
+    if(name === query) score += 100;
+    else if(query && (name.indexOf(query) === 0 || query.indexOf(name) === 0)) score += 30;
+    // ends with a water word = it IS the water, not a subdivision named for it
+    if(/(river|creek|stream|brook|branch|fork|lake|pond|reservoir|bay|sound|gulf|sea|ocean|inlet|marsh|bayou|slough|cove|lagoon|estuary|harbou?r|channel|narrows|spring|falls|rapids|flats)$/i.test(name)) score += 40;
+    // demote residential / infrastructure names that merely contain a water word
+    if(/\b(hills?|heights|estates?|village|manor|acres|watershed|subdivision|crossing|drive|road|court|lane|street|avenue|boulevard|circle|apartments?|school)\b/i.test(name)) score -= 40;
+    var extra = name.split(/\s+/).length - (query ? query.split(/\s+/).length : 1);
+    if(extra > 0) score -= extra * 4;
+    return score;
+  }
+
+  function splitWaters(list, query){
     var placeTypes = {city:1, town:1, village:1, suburb:1, county:1, municipality:1, state:1};
     var dropTypes = {street:1, building:1, postcode:1};
     var out = {waters: [], city: null};
@@ -1526,6 +1543,9 @@
       if(dropTypes[r.result_type]) return;
       if(waterNameRe.test(nm)) out.waters.push(r);
     });
+    if(query){
+      out.waters.sort(function(a, b){ return waterScore(b, query) - waterScore(a, query); });
+    }
     return out;
   }
 
@@ -1589,12 +1609,24 @@
     });
   }
 
-  // programmatic geocode for the AI planner: reuse the search machinery and
-  // return the best water (or a town) for a plain place name
-  function geocodeWater(name){
-    return Promise.all(queryVariants(name).map(function(v){
-      return fetch('https://api.geoapify.com/v1/geocode/autocomplete?text=' + encodeURIComponent(v) + '&limit=6&format=json' + (ipBias ? '&bias=proximity:' + ipBias : '') + '&apiKey=' + GEOAPIFY_KEY)
-        .then(function(r){ return r.json(); }).catch(function(){ return {}; });
+  // programmatic geocode for the AI planner. The planner's place often
+  // carries region tokens ("Huron River, Ann Arbor, MI") that make the map
+  // rank a same-named subdivision first, so query on the water name across
+  // both endpoints and let waterScore pick the true feature.
+  function geocodeWater(place){
+    var waterName = (place || '').split(',')[0].trim();
+    var calls = [];
+    queryVariants(waterName).forEach(function(v){
+      calls.push('https://api.geoapify.com/v1/geocode/autocomplete?text=' + encodeURIComponent(v) + '&limit=6&format=json' + (ipBias ? '&bias=proximity:' + ipBias : '') + '&apiKey=' + GEOAPIFY_KEY);
+    });
+    // full-text search surfaces clean natural features; run it on the water
+    // name and (for cross-state disambiguation) the full place string
+    calls.push('https://api.geoapify.com/v1/geocode/search?text=' + encodeURIComponent(waterName) + '&limit=6&format=json' + (ipBias ? '&bias=proximity:' + ipBias : '') + '&apiKey=' + GEOAPIFY_KEY);
+    if(place && place !== waterName){
+      calls.push('https://api.geoapify.com/v1/geocode/search?text=' + encodeURIComponent(place) + '&limit=6&format=json' + (ipBias ? '&bias=proximity:' + ipBias : '') + '&apiKey=' + GEOAPIFY_KEY);
+    }
+    return Promise.all(calls.map(function(u){
+      return fetch(u).then(function(r){ return r.json(); }).catch(function(){ return {}; });
     })).then(function(datas){
       var merged = [], seen = {};
       datas.forEach(function(d){
@@ -1603,15 +1635,10 @@
           if(!seen[k]){ seen[k] = 1; merged.push(c); }
         });
       });
-      var sp = splitWaters(merged);
+      var sp = splitWaters(merged, waterName);
       if(sp.waters.length) return {type:'water', r:sp.waters[0]};
-      return fetch('https://api.geoapify.com/v1/geocode/search?text=' + encodeURIComponent(name) + '&limit=6&format=json' + (ipBias ? '&bias=proximity:' + ipBias : '') + '&apiKey=' + GEOAPIFY_KEY)
-        .then(function(r){ return r.json(); }).then(function(d){
-          var sp2 = splitWaters(d.results || []);
-          if(sp2.waters.length) return {type:'water', r:sp2.waters[0]};
-          if(sp2.city) return {type:'city', r:sp2.city};
-          return sp.city ? {type:'city', r:sp.city} : null;
-        }).catch(function(){ return sp.city ? {type:'city', r:sp.city} : null; });
+      if(sp.city) return {type:'city', r:sp.city};
+      return null;
     });
   }
 
