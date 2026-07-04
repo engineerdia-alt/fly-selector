@@ -107,6 +107,11 @@
     transition:border-color .15s ease, background .15s ease;
   }
   .ff-opt:hover{border-color:var(--brass);background:#EFE7D2;}
+  .ff-opt-water{display:flex;align-items:center;gap:12px;}
+  .ff-opt-icon{flex:0 0 auto;width:34px;height:34px;color:var(--moss);}
+  .ff-opt-icon svg{width:34px;height:34px;}
+  .ff-opt.selected .ff-opt-icon{color:var(--brass-dark);}
+  .ff-opt-water .ff-opt-txt{display:flex;flex-direction:column;}
   .ff-opt.selected{
     border-color:var(--rust);
     background:var(--river);
@@ -319,6 +324,14 @@
     color:var(--river);
     margin:0 0 18px;
   }
+  .ff-hero{
+    border-radius:12px;
+    overflow:hidden;
+    margin:6px 0 26px;
+    line-height:0;
+    box-shadow:inset 0 -1px 0 rgba(0,0,0,0.05);
+  }
+  .ff-hero svg{width:100%;height:150px;display:block;}
   .ff-card{
     background:var(--river);
     color:var(--parchment);
@@ -326,6 +339,25 @@
     padding:24px 22px;
     margin-bottom:14px;
   }
+  .ff-card-head{
+    display:flex;
+    align-items:center;
+    gap:14px;
+    margin-bottom:14px;
+  }
+  .ff-fly-thumb{
+    flex:0 0 auto;
+    width:60px;
+    height:60px;
+    border-radius:50%;
+    background:rgba(242,236,221,0.08);
+    border:1px solid rgba(181,138,74,0.4);
+    display:flex;
+    align-items:center;
+    justify-content:center;
+  }
+  .ff-fly-thumb svg{width:44px;height:44px;}
+  .ff-card-head .ff-card-fly,.ff-card-head .ff-card-color{margin:0;}
   .ff-card-fly{
     font-family:'Fraunces',serif;
     font-weight:600;
@@ -602,6 +634,25 @@
   <h1 class="ff-h1">What's the water doing today?</h1>
   <p class="ff-sub">Search any river, lake, or stretch of coast, or set conditions manually, and we'll tell you what to tie on, what to expect, and what gear to bring.</p>
 
+  <div class="ff-hero" id="hero" aria-hidden="true">
+    <svg viewBox="0 0 800 180" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <rect width="800" height="180" fill="var(--parchment-dim)"/>
+      <circle cx="650" cy="52" r="30" fill="var(--brass)" opacity="0.85"/>
+      <path d="M0 92 q120 -40 260 -18 q160 26 300 -6 q140 -30 240 4 V180 H0 Z" fill="var(--moss)" opacity="0.55"/>
+      <path d="M0 120 q160 -30 320 -6 q180 26 480 -12 V180 H0 Z" fill="var(--river-light)" opacity="0.8"/>
+      <path d="M0 150 q200 -22 420 -4 q200 16 380 -8 V180 H0 Z" fill="var(--river)"/>
+      <path d="M120 168 q200 -34 380 -14 q140 16 300 -2" fill="none" stroke="var(--parchment)" stroke-width="2" opacity="0.35"/>
+      <g stroke="var(--river)" stroke-width="2" fill="none" opacity="0.9">
+        <path d="M300 26 q70 8 118 40"/>
+      </g>
+      <g transform="translate(300,26)">
+        <circle cx="0" cy="0" r="5" fill="var(--brass)"/>
+        <path d="M2 0 q22 -5 44 3 q-14 5 -26 10 q-10 -8 -18 -13z" fill="var(--river)"/>
+        <path d="M2 4 q-6 10 3 18 q6 -5 4 -12" fill="none" stroke="var(--brass)" stroke-width="2"/>
+      </g>
+    </svg>
+  </div>
+
   <div class="ff-leader" id="leader">
     <div class="ff-fly-marker active" data-idx="0"></div>
     <div class="ff-leader-seg" data-idx="0"></div>
@@ -643,10 +694,10 @@
   <div class="ff-step" data-step="1">
     <p class="ff-q">Where are you fishing?</p>
     <div class="ff-options">
-      <button class="ff-opt" data-field="water" data-value="river"><span class="ff-opt-label">Moving river</span><span class="ff-opt-hint">current, riffles, runs</span></button>
-      <button class="ff-opt" data-field="water" data-value="lake"><span class="ff-opt-label">Lake or reservoir</span><span class="ff-opt-hint">still or slow water</span></button>
-      <button class="ff-opt" data-field="water" data-value="pond"><span class="ff-opt-label">Pond</span><span class="ff-opt-hint">small, shallow, calm</span></button>
-      <button class="ff-opt" data-field="water" data-value="ocean"><span class="ff-opt-label">Ocean or bay</span><span class="ff-opt-hint">saltwater, flats, surf</span></button>
+      <button class="ff-opt" data-field="water" data-value="river"><span class="ff-opt-water"><span class="ff-opt-icon"><svg viewBox="0 0 34 34" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M4 11 q5 -4 9 0 t9 0 t8 0"/><path d="M4 18 q5 -4 9 0 t9 0 t8 0"/><path d="M4 25 q5 -4 9 0 t9 0 t8 0"/></svg></span><span class="ff-opt-txt"><span class="ff-opt-label">Moving river</span><span class="ff-opt-hint">current, riffles, runs</span></span></span></button>
+      <button class="ff-opt" data-field="water" data-value="lake"><span class="ff-opt-water"><span class="ff-opt-icon"><svg viewBox="0 0 34 34" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><ellipse cx="17" cy="17" rx="13" ry="9"/><path d="M10 15 q3 -2 6 0 t6 0" stroke-width="1.6"/><path d="M11 20 q3 -2 6 0" stroke-width="1.6"/></svg></span><span class="ff-opt-txt"><span class="ff-opt-label">Lake or reservoir</span><span class="ff-opt-hint">still or slow water</span></span></span></button>
+      <button class="ff-opt" data-field="water" data-value="pond"><span class="ff-opt-water"><span class="ff-opt-icon"><svg viewBox="0 0 34 34" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><circle cx="17" cy="18" r="11"/><path d="M12 19 q5 -3 10 0" stroke-width="1.6"/><path d="M13 23 q4 -2 8 0" stroke-width="1.6"/><ellipse cx="21" cy="14" rx="4.5" ry="2.4" fill="currentColor" stroke="none" opacity="0.55"/></svg></span><span class="ff-opt-txt"><span class="ff-opt-label">Pond</span><span class="ff-opt-hint">small, shallow, calm</span></span></span></button>
+      <button class="ff-opt" data-field="water" data-value="ocean"><span class="ff-opt-water"><span class="ff-opt-icon"><svg viewBox="0 0 34 34" xmlns="http://www.w3.org/2000/svg" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><path d="M3 20 q4 -6 8 0 t8 0 t8 0 t8 0" stroke-width="2.2"/><path d="M3 26 q4 -6 8 0 t8 0 t8 0 t8 0" stroke-width="2.2"/><circle cx="25" cy="9" r="3.5" stroke-width="1.6"/></svg></span><span class="ff-opt-txt"><span class="ff-opt-label">Ocean or bay</span><span class="ff-opt-hint">saltwater, flats, surf</span></span></span></button>
     </div>
     <button class="ff-back" data-back="0">&larr; back</button>
   </div>
@@ -2273,6 +2324,37 @@
     return gear[s] || gear.saltwater;
   }
 
+  // categorize a recommended pattern from its shop search term, then draw a
+  // simple on-brand SVG of that fly type for the result card
+  function flyCategory(term){
+    term = (term || '').toLowerCase();
+    if(/popper|gurgler|diver/.test(term)) return 'popper';
+    if(/crab|shrimp|spoon|gotcha|charlie/.test(term)) return 'crab';
+    if(/egg|worm|san juan|squirmy|backstabber/.test(term)) return 'egg';
+    if(/nymph|copper john|pheasant|midge|prince|stone|baetis|pmd|hare/.test(term)) return 'nymph';
+    if(/dry|adams|caddis|hopper|dun|spinner|drake|sulphur|cahill|quill|gordon|cicada|skwala|trico/.test(term)) return 'dry';
+    return 'streamer';
+  }
+
+  function flyArt(cat){
+    var g = 'var(--brass)', d = 'var(--parchment)', h = 'var(--rust)';
+    var svg = {
+      // weighted streamer: bead head, hook, flowing marabou tail
+      streamer: '<circle cx="16" cy="26" r="5" fill="'+g+'"/><path d="M20 26 q14 -3 30 2 q-10 3 -18 8 q-6 -6 -12 -10z" fill="'+d+'"/><path d="M48 28 q8 0 12 -4 q-3 6 -10 8 q-2 -2 -2 -4z" fill="'+g+'"/><path d="M18 30 q-4 8 2 14 q4 -4 3 -10" fill="none" stroke="'+g+'" stroke-width="2"/>',
+      // segmented buggy nymph with legs
+      nymph: '<circle cx="15" cy="22" r="4" fill="'+g+'"/><path d="M18 24 q12 2 26 10 q-14 4 -26 -2z" fill="'+d+'"/><path d="M24 30 l-4 8 M32 33 l-2 9 M40 35 l1 8" stroke="'+g+'" stroke-width="1.6" fill="none"/><path d="M44 34 q6 4 12 2" stroke="'+g+'" stroke-width="1.6" fill="none"/>',
+      // dry fly: upright wing + hackle
+      dry: '<path d="M30 40 q6 -20 4 -30 q6 12 4 30z" fill="'+d+'"/><circle cx="30" cy="40" r="4" fill="'+g+'"/><path d="M18 40 q12 4 24 0 M20 44 q10 3 20 0" stroke="'+g+'" stroke-width="1.6" fill="none"/><path d="M30 44 q-3 8 -8 12" stroke="'+g+'" stroke-width="2" fill="none"/>',
+      // popper: cupped foam head + tail
+      popper: '<path d="M14 30 q0 -8 10 -8 q10 0 10 8 q0 8 -10 8 q-10 0 -10 -8z" fill="'+h+'"/><path d="M14 30 q-4 0 -6 -3 q2 6 6 6z" fill="'+d+'"/><path d="M34 30 q12 -2 22 4 q-10 3 -22 4z" fill="'+d+'"/>',
+      // crab/shrimp: body + legs + claws
+      crab: '<ellipse cx="32" cy="32" rx="12" ry="8" fill="'+d+'"/><path d="M20 32 q-8 -4 -12 -10 M20 34 q-8 2 -14 2 M44 30 q8 -4 12 -9 M44 34 q8 2 13 1" stroke="'+g+'" stroke-width="1.6" fill="none"/><circle cx="26" cy="30" r="1.6" fill="'+g+'"/><circle cx="38" cy="30" r="1.6" fill="'+g+'"/>',
+      // egg pattern: round bead
+      egg: '<circle cx="30" cy="32" r="12" fill="'+h+'"/><circle cx="26" cy="28" r="4" fill="'+d+'" opacity="0.5"/><path d="M42 32 q6 0 10 -3 q-2 5 -8 6z" fill="'+g+'"/>'
+    };
+    return '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">' + (svg[cat] || svg.streamer) + '</svg>';
+  }
+
   function renderResult(){
     var rec = recommendFly();
     var gear = gearFor(rec);
@@ -2291,8 +2373,9 @@
               '<button class="ff-mini-btn" id="tripSaveBtn" type="button">Save to trip log</button></div>';
     }
     html += '<div class="ff-card">';
-    html += '<p class="ff-card-fly">' + rec.primary + '</p>';
-    html += '<p class="ff-card-color">Suggested color: ' + rec.color + '</p>';
+    html += '<div class="ff-card-head"><div class="ff-fly-thumb">' + flyArt(flyCategory(rec.term)) + '</div>' +
+            '<div><p class="ff-card-fly">' + rec.primary + '</p>' +
+            '<p class="ff-card-color">Suggested color: ' + rec.color + '</p></div></div>';
     html += '<p class="ff-card-why">' + rec.reasoning + '</p>';
     html += '<div class="ff-card-actions">';
     html += '<a class="ff-btn ff-btn-primary" href="' + shopUrl(rec.term) + '" target="_top">Shop this fly \u2197</a>';
