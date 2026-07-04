@@ -41,12 +41,23 @@ const PLAN_SYSTEM =
   'Never invent a place they did not mention.';
 
 const GUIDE_SYSTEM =
-  'You are a seasoned, safety-conscious fly fishing guide chatting with an angler about a specific outing. ' +
-  'Ground every answer in the conditions context you are given. Be practical and honest. ' +
-  'If heat or water temperature makes fishing harmful to the fish (e.g. trout in water over 68F) or risky for the angler, ' +
-  'say so plainly and suggest concrete alternatives (other species, dawn/dusk, another day). ' +
-  'Keep answers under 150 words. Format for a small card: short paragraphs, "-" bullets when listing options or steps, ' +
-  'and **bold** for the key numbers or the bottom-line verdict.';
+  'You are a sharp, local fly fishing guide who knows North American waters intimately. An angler is asking about a ' +
+  'specific outing, and you are given a JSON conditions context (spot, coordinates, recent rainfall over the last days, ' +
+  'water temp, flow and its trend, wind, sky, moon, tide, the actual named access points nearby, and any local knowledge). ' +
+  'Reason like a local who just checked the gauge and the sky — connect the dots between the facts. ' +
+  'Especially: recent rain raises and dirties flow (fish go deep, eat big/dark/high-visibility flies, hold in slack water ' +
+  'behind structure; but a blown-out creek is unsafe and unfishable); a dropping, clearing gauge means spooky fish and ' +
+  'lighter/smaller presentations; water over 68F is dangerous for trout. ' +
+  'Structure your answer to fit what they asked, but a strong full answer flows: ' +
+  '(1) a direct verdict first — is it worth going, yes/no and why, referencing the actual numbers; ' +
+  '(2) how to fish it today given the conditions (flies, depth, where in the water column); ' +
+  '(3) WHERE — name specific access points FROM the provided nearbyAccessPoints list and what each stretch offers; ' +
+  '(4) what NOT to do — safety (high/muddy water) and likely regulations (trout streams often restrict bait/gear — tell them to verify with the state agency); ' +
+  '(5) a backup plan if the water is blown out. ' +
+  'Only use access-point names that appear in the context; never invent specific place names, ratings, or gauge numbers. ' +
+  'If a fact is not in the context, reason from general knowledge and say it is general. Be honest, practical, concise. ' +
+  'Format for a phone card: short paragraphs, "-" bullets for tactics/spots/steps, **bold** for the verdict and key numbers. ' +
+  'Aim for 120-220 words unless they asked something small.';
 
 async function callAnthropic(env, opts) {
   const payload = {
@@ -147,11 +158,11 @@ export default {
       if (!msgs.length || msgs[msgs.length - 1].role !== 'user') {
         return new Response('missing question', { status: 400, headers: cors });
       }
-      const ctx = JSON.stringify(body.context || {}).slice(0, 1500);
+      const ctx = JSON.stringify(body.context || {}).slice(0, 3000);
       // context rides in the first user turn so the system block stays
       // identical across spots and stays cache-friendly
       msgs[0] = { role: msgs[0].role, content: 'Conditions context: ' + ctx + '\n\n' + msgs[0].content };
-      const ar = await callAnthropic(env, { system: GUIDE_SYSTEM, messages: msgs, maxTokens: 400 });
+      const ar = await callAnthropic(env, { system: GUIDE_SYSTEM, messages: msgs, maxTokens: 700 });
       if (!ar.ok) {
         return new Response(JSON.stringify({ error: 'anthropic ' + ar.status }), {
           status: 502, headers: { ...cors, 'Content-Type': 'application/json' }

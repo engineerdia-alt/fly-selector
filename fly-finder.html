@@ -324,6 +324,18 @@
     color:var(--river);
     margin:0 0 18px;
   }
+  .ff-map-load{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    background:var(--river);
+    color:var(--parchment);
+    border:none;
+    border-radius:7px;
+    padding:7px 10px;
+    cursor:pointer;
+    box-shadow:0 1px 4px rgba(0,0,0,0.3);
+  }
+  .ff-map-load:disabled{opacity:0.7;cursor:default;}
   .ff-cond-bar{
     display:flex;
     flex-wrap:wrap;
@@ -802,7 +814,7 @@
 
 <script>
 (function(){
-  var state = {location:null, notes:null, aiRefine:null, gauge:null, tide:null, bestWindow:null, access:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
+  var state = {location:null, notes:null, aiRefine:null, recentWeather:null, gauge:null, tide:null, bestWindow:null, access:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
   var currentStep = 0;
   var resultMap = null;
 
@@ -855,9 +867,7 @@
       btn.className = 'ff-opt';
       btn.dataset.field = 'species';
       btn.dataset.value = key;
-      btn.innerHTML = '<span class="ff-opt-water"><span class="ff-opt-icon">' + fishIcon(key) + '</span>' +
-        '<span class="ff-opt-txt"><span class="ff-opt-label">' + info.label + '</span>' +
-        '<span class="ff-opt-hint">' + info.hint + '</span></span></span>';
+      btn.innerHTML = '<span class="ff-opt-label">' + info.label + '</span><span class="ff-opt-hint">' + info.hint + '</span>';
       btn.addEventListener('click', function(){ onOptClick(btn); });
       wrap.appendChild(btn);
     });
@@ -957,11 +967,21 @@
 
   function fetchWeather(lat, lon, statusEl){
     var url = 'https://api.open-meteo.com/v1/forecast?latitude=' + lat + '&longitude=' + lon +
-      '&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover' +
-      '&hourly=temperature_2m,wind_speed_10m,cloud_cover&forecast_days=1&timezone=auto' +
-      '&temperature_unit=fahrenheit&wind_speed_unit=mph';
+      '&current=temperature_2m,wind_speed_10m,wind_direction_10m,cloud_cover,precipitation' +
+      '&hourly=temperature_2m,wind_speed_10m,cloud_cover&daily=precipitation_sum' +
+      '&past_days=2&forecast_days=1&timezone=auto' +
+      '&temperature_unit=fahrenheit&wind_speed_unit=mph&precipitation_unit=inch';
     return fetch(url).then(function(r){ return r.json(); }).then(function(data){
       state.bestWindow = computeBestWindow(data.hourly);
+      // recent rainfall drives clarity/flow, which drives everything else
+      var dp = data.daily && data.daily.precipitation_sum;
+      if(dp && dp.length >= 2){
+        state.recentWeather = {
+          yesterdayIn: Math.round(dp[dp.length - 2] * 100) / 100,
+          twoDaysIn: dp.length >= 3 ? Math.round(dp[dp.length - 3] * 100) / 100 : null,
+          todayIn: Math.round(dp[dp.length - 1] * 100) / 100
+        };
+      }
       applyWeather(data, statusEl);
     });
   }
@@ -1948,7 +1968,7 @@
   });
 
   document.getElementById('restartBtn').addEventListener('click', function(){
-    state = {location:null, notes:null, aiRefine:null, gauge:null, tide:null, bestWindow:null, access:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
+    state = {location:null, notes:null, aiRefine:null, recentWeather:null, gauge:null, tide:null, bestWindow:null, access:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
     document.querySelectorAll('.ff-opt, .ff-chip, .ff-dir').forEach(function(b){ b.classList.remove('selected'); });
     document.getElementById('locateStatus').textContent = '';
     document.getElementById('gaugeStatus').textContent = '';
@@ -2376,24 +2396,6 @@
     return '<svg viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">' + (svg[cat] || svg.streamer) + '</svg>';
   }
 
-  // side-profile fish silhouettes for the species step, mapped by species key
-  function fishArt(kind){
-    var eye = 'var(--parchment)';
-    var art = {
-      trout: '<path d="M4 12 q11 -7 22 -5 q4 1 7 4 q-3 3 -7 4 q-11 2 -22 -3z"/><path d="M4 12 l-3 -4 v8z"/><path d="M17 7 q2 -3 5 -3 q-1 3 -3 4z"/><circle cx="28" cy="11" r="1.2" fill="'+eye+'"/>',
-      bass: '<path d="M4 12 q9 -9 22 -6 q5 1 7 5 q-2 4 -7 5 q-13 2 -22 -4z"/><path d="M4 12 l-3 -5 v10z"/><path d="M30 9 q3 1 3 3 q0 2 -3 3" fill="none" stroke="currentColor" stroke-width="1.4"/><circle cx="27" cy="11" r="1.3" fill="'+eye+'"/>',
-      pike: '<path d="M2 12 q15 -5 27 -4 q3 0 5 4 q-2 4 -5 4 q-12 1 -27 -4z"/><path d="M2 12 l-1 -3 v6z"/><circle cx="30" cy="11" r="1.1" fill="'+eye+'"/>',
-      panfish: '<path d="M9 12 q6 -8 14 -7 q7 1 9 7 q-2 6 -9 7 q-8 1 -14 -7z"/><path d="M9 12 l-6 -5 v10z"/><circle cx="22" cy="10" r="1.3" fill="'+eye+'"/>',
-      carp: '<path d="M6 12 q8 -8 19 -6 q5 1 7 5 q-2 4 -7 5 q-11 2 -19 -4z"/><path d="M6 12 l-4 -5 v10z"/><path d="M31 12 q3 1 4 3 M31 13 q3 2 4 4" fill="none" stroke="currentColor" stroke-width="1.2"/><circle cx="26" cy="11" r="1.3" fill="'+eye+'"/>',
-      salt: '<path d="M3 12 q13 -6 25 -4 q3 1 5 4 q-2 3 -5 4 q-12 2 -25 -4z"/><path d="M3 12 l-2 -4 l1 4 l-1 4z"/><circle cx="29" cy="11" r="1.2" fill="'+eye+'"/>'
-    };
-    return '<svg viewBox="0 0 36 24" xmlns="http://www.w3.org/2000/svg" fill="currentColor">' + (art[kind] || art.trout) + '</svg>';
-  }
-  function fishIcon(key){
-    var map = {trout:'trout', steelhead:'trout', bass:'bass', pike:'pike', panfish:'panfish', carp:'carp', striper:'salt', bluefish:'salt', albie:'salt', redfish:'salt'};
-    return fishArt(map[key] || 'trout');
-  }
-
   // small line icons for the conditions-at-a-glance chips
   function condIcon(kind){
     var s = 'stroke="currentColor" stroke-width="2" fill="none" stroke-linecap="round" stroke-linejoin="round"';
@@ -2404,6 +2406,51 @@
       flow: '<path d="M3 9q4 -4 8 0t8 0M3 14q4 -4 8 0t8 0M3 19q4 -4 8 0t8 0" '+s+'/>'
     };
     return '<svg viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">' + (art[kind] || '') + '</svg>';
+  }
+
+  // everything the guide needs to reason like a local: recent rain, flow
+  // trend, the real named access points, regs cues, and current conditions
+  function buildGuideContext(){
+    var g = state.gauge || {};
+    var loc = state.location || {};
+    var rw = state.recentWeather;
+    var ctx = {
+      spot: loc.name,
+      region: loc.region,
+      state: loc.state,
+      coords: loc.lat != null ? (loc.lat.toFixed(3) + ',' + loc.lon.toFixed(3)) : null,
+      water: state.water,
+      species: state.species,
+      method: state.method,
+      date: new Date().toLocaleDateString('en', {weekday:'long', month:'long', day:'numeric'}),
+      airTemp: state.temp,
+      sky: state.sky,
+      wind: state.windSpeed,
+      windDir: state.windDir,
+      waterTempF: g.waterTempF != null ? g.waterTempF : null,
+      flowCfs: g.flow != null ? Math.round(g.flow) : null,
+      flowTrend: g.trend || null,
+      flowTrendPct: g.trendPct != null ? g.trendPct : null,
+      gaugeName: g.name || null,
+      tide: state.tide && state.tide.direction,
+      moon: moonPhase().name,
+      bestWindowToday: state.bestWindow || null
+    };
+    if(rw){
+      ctx.rainYesterdayIn = rw.yesterdayIn;
+      ctx.rainTwoDaysAgoIn = rw.twoDaysIn;
+      ctx.rainTodayIn = rw.todayIn;
+    }
+    if(state.access && state.access.length){
+      ctx.nearbyAccessPoints = state.access.slice(0, 6).map(function(a){
+        return {name: a.name || ('unnamed ' + a.kind.toLowerCase()), kind: a.kind, milesAway: Math.round(a.dist * 10) / 10};
+      });
+    }
+    if(state.notes){
+      ctx.localKnowledge = {hatches: state.notes.hatches, regs: state.notes.regs, stretches: state.notes.stretches};
+    }
+    if(state.aiRefine && state.aiRefine.regs) ctx.sectionRegs = state.aiRefine.regs;
+    return ctx;
   }
 
   function conditionsBar(){
@@ -2638,16 +2685,7 @@
         input.value = '';
         statusEl.textContent = 'The guide is thinking...';
         askBtn.disabled = true;
-        var g = state.gauge || {};
-        var ctx = {
-          spot: state.location && state.location.name,
-          state: state.location && state.location.state,
-          water: state.water, species: state.species,
-          month: new Date().toLocaleString('en', {month: 'long'}),
-          airTemp: state.temp, sky: state.sky, wind: state.windSpeed,
-          flowCfs: g.flow, flowTrend: g.trend, waterTempF: g.waterTempF,
-          tide: state.tide && state.tide.direction
-        };
+        var ctx = buildGuideContext();
         (function attempt(i){
           if(i >= REFINE_URLS.length){
             statusEl.textContent = 'Couldn\'t reach the guide — try again in a minute.';
@@ -2825,6 +2863,43 @@
     } else {
       resultMap.setView(pts[0], 12);
     }
+
+    // zoom out and pull in every launch & access point in view, on demand
+    var seen = {};
+    (state.access || []).forEach(function(a){ seen[a.lat.toFixed(4) + ',' + a.lon.toFixed(4)] = 1; });
+    var LoadCtl = L.Control.extend({
+      options: {position: 'topright'},
+      onAdd: function(){
+        var b = L.DomUtil.create('button', 'ff-map-load');
+        b.type = 'button';
+        b.textContent = '+ Load spots in this view';
+        L.DomEvent.disableClickPropagation(b);
+        L.DomEvent.on(b, 'click', function(){
+          var bn = resultMap.getBounds();
+          b.textContent = 'Loading…'; b.disabled = true;
+          var box = bn.getSouth() + ',' + bn.getWest() + ',' + bn.getNorth() + ',' + bn.getEast();
+          var q = '[out:json][timeout:20];(nwr["leisure"="slipway"](' + box + ');nwr["leisure"="fishing"](' + box + '););out center tags 150;';
+          overpassFetch(q).then(function(data){
+            var added = 0;
+            (data.elements || []).forEach(function(e){
+              var elat = e.lat != null ? e.lat : (e.center && e.center.lat);
+              var elon = e.lon != null ? e.lon : (e.center && e.center.lon);
+              if(elat == null) return;
+              var key = elat.toFixed(4) + ',' + elon.toFixed(4);
+              if(seen[key]) return; seen[key] = 1; added++;
+              var t = e.tags || {};
+              var kind = t.leisure === 'slipway' ? 'Boat / canoe launch' : 'Fishing access';
+              L.circleMarker([elat, elon], {radius:6, color:'#8C6A38', fillColor:'#B58A4A', fillOpacity:0.85})
+                .bindPopup(popupHtml(t.name || kind, kind, elat, elon)).addTo(resultMap);
+            });
+            b.textContent = added ? '+' + added + ' spots — pan & tap again' : 'No more mapped here';
+            b.disabled = false;
+          }).catch(function(){ b.textContent = 'Try again'; b.disabled = false; });
+        });
+        return b;
+      }
+    });
+    resultMap.addControl(new LoadCtl());
   }
 
   // ---- full-screen explore map ----
