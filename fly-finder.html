@@ -1077,6 +1077,7 @@
           if(byDist[bi].waterTempF != null){
             site.waterTempF = byDist[bi].waterTempF;
             site.tempFrom = byDist[bi].name;
+            site.tempDist = byDist[bi].dist;
             break;
           }
         }
@@ -1737,9 +1738,26 @@
   }
 
   // take the AI planner's structured result and drive the existing pipeline
+  // carry the angler's original free-form question into the guide once we
+  // land on results, so "ask, skip the quiz" gives the full grounded answer
+  function autoAskGuide(q){
+    if(!q || !REFINE_URLS.length) return;
+    setTimeout(function(){
+      var input = document.getElementById('askInput');
+      var btn = document.getElementById('askBtn');
+      if(!input || !btn || state.askChat.length) return;
+      input.value = q;
+      btn.click();
+      var card = document.getElementById('askThread');
+      if(card && card.scrollIntoView) card.scrollIntoView({behavior:'smooth', block:'center'});
+    }, 2600); // let weather, gauge and access points load first
+  }
+
   function runPlan(plan){
     var statusEl = document.getElementById('planStatus');
     statusEl.textContent = 'Finding ' + plan.place + '…';
+    var firstAsk = (planChat.filter(function(m){ return m.role === 'user'; })[0] || {}).content;
+    var askIsQuestion = firstAsk && /\?|\bwhat\b|\bwhere\b|\bhow\b|should|can i|is it|worth|avoid|do you think|rain|catch/i.test(firstAsk);
     geocodeWater(plan.place).then(function(hit){
       if(!hit){
         statusEl.textContent = 'Couldn\'t place "' + plan.place + '". Try the water or a nearby town in the search box below.';
@@ -1770,8 +1788,10 @@
         statusEl.textContent = 'Pulling conditions and flies for ' + name + '…';
         wx.then(function(){
           statusEl.textContent = '';
-          if(state.temp && state.sky && state.windSpeed){ renderResult(); goToStep(5); }
-          else { goToStep(4); }
+          if(state.temp && state.sky && state.windSpeed){
+            renderResult(); goToStep(5);
+            if(askIsQuestion) autoAskGuide(firstAsk);
+          } else { goToStep(4); }
         }).catch(function(){ statusEl.textContent = ''; goToStep(4); });
       } else {
         statusEl.textContent = '';
@@ -2428,6 +2448,7 @@
       wind: state.windSpeed,
       windDir: state.windDir,
       waterTempF: g.waterTempF != null ? g.waterTempF : null,
+      waterTempApproxFromGauge: g.tempFrom ? (g.tempFrom + (g.tempDist != null ? ' (' + g.tempDist.toFixed(0) + ' mi away)' : '')) : null,
       flowCfs: g.flow != null ? Math.round(g.flow) : null,
       flowTrend: g.trend || null,
       flowTrendPct: g.trendPct != null ? g.trendPct : null,
@@ -2450,6 +2471,8 @@
       ctx.localKnowledge = {hatches: state.notes.hatches, regs: state.notes.regs, stretches: state.notes.stretches};
     }
     if(state.aiRefine && state.aiRefine.regs) ctx.sectionRegs = state.aiRefine.regs;
+    // our shop's own how-to blog, for the guide to point learners to
+    ctx.shopBlogSearch = 'https://flyfishinguniverse.com/search?type=article&q=';
     return ctx;
   }
 
@@ -2515,7 +2538,11 @@
     }
 
     if((state.species === 'trout' || state.species === 'steelhead') && state.gauge && state.gauge.waterTempF != null && state.gauge.waterTempF >= 68){
-      html += '<div class="ff-info-card"><p class="ff-info-label">Heads up — warm water</p><p class="ff-info-body">The nearby gauge reads ' + state.gauge.waterTempF + '°F. Above 68°F, trout fight to exhaustion and often die even when released carefully. Fish dawn when the water is coolest, switch to warm-water species like bass or carp, or save this water for a cooler day.</p></div>';
+      var tg = state.gauge;
+      var src = tg.tempFrom
+        ? 'A gauge ' + (tg.tempDist != null ? tg.tempDist.toFixed(0) + ' mi away' : 'nearby') + ' (' + tg.tempFrom + ') reads ' + tg.waterTempF + '°F, so treat this as approximate — your exact stretch, especially spring-fed or shaded water, may run cooler.'
+        : 'The nearby gauge reads ' + tg.waterTempF + '°F.';
+      html += '<div class="ff-info-card"><p class="ff-info-label">Heads up — warm water</p><p class="ff-info-body">' + src + ' Above 68°F, trout fight to exhaustion and often die even when released carefully. Carry a thermometer to check your spot; if it\'s truly that warm, fish dawn when the water is coolest, switch to warm-water species like bass or carp, or save this water for a cooler day.</p></div>';
     }
 
     if(state.notes){
@@ -2787,17 +2814,28 @@
   function mdLite(s){
     var out = escapeHtml(s)
       .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
-      .replace(/\*([^*\n]+)\*/g, '<em>$1</em>');
+      .replace(/\*([^*\n]+)\*/g, '<em>$1</em>')
+      // [text](url) links — only allow safe http(s) targets we expect
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^)\s]+)\)/g, function(m, text, url){
+        if(/^https?:\/\/(www\.youtube\.com|youtu\.be|flyfishinguniverse\.com|waterdata\.usgs\.gov|www\.google\.com)\//.test(url)){
+          return '<a href="' + url + '" target="_blank" rel="noopener">' + text + '</a>';
+        }
+        return text;
+      });
     var lines = out.split(/\n/);
     var html = '', inList = false;
     lines.forEach(function(l){
-      var m = l.match(/^\s*[-•]\s+(.*)/);
-      if(m){
+      var bullet = l.match(/^\s*[-•]\s+(.*)/);
+      var head = l.match(/^\s*#{1,6}\s+(.*)/);
+      var rule = /^\s*(-{3,}|\*{3,}|_{3,})\s*$/.test(l);
+      if(bullet){
         if(!inList){ html += '<ul class="ff-md-list">'; inList = true; }
-        html += '<li>' + m[1] + '</li>';
+        html += '<li>' + bullet[1] + '</li>';
       } else {
         if(inList){ html += '</ul>'; inList = false; }
-        if(l.trim()) html += '<p class="ff-md-p">' + l + '</p>';
+        if(rule){ /* skip stray markdown dividers */ }
+        else if(head){ html += '<p class="ff-md-p"><strong>' + head[1].replace(/[:：]\s*$/, '') + '</strong></p>'; }
+        else if(l.trim()){ html += '<p class="ff-md-p">' + l + '</p>'; }
       }
     });
     if(inList) html += '</ul>';
