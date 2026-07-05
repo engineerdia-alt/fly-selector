@@ -5,3 +5,7 @@ workers_dev = true
 routes = [
   { pattern = "api.flyfishingfinder.com", custom_domain = true }
 ]
+
+[[kv_namespaces]]
+binding = "FEEDBACK"
+id = "fc930e45eaaf47098009791c5ba25184"

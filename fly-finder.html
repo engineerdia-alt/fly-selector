@@ -82,8 +82,8 @@
   .ff-step.active{display:block;}
   .ff-q{
     font-family:'Fraunces',serif;
-    font-weight:500;
-    font-size:19px;
+    font-weight:600;
+    font-size:20px;
     color:var(--river);
     margin:0 0 18px;
   }
@@ -459,11 +459,12 @@
   }
   .ff-info-label{
     font-family:'IBM Plex Mono',monospace;
-    font-size:11px;
-    letter-spacing:0.05em;
+    font-size:12px;
+    font-weight:600;
+    letter-spacing:0.06em;
     text-transform:uppercase;
-    color:var(--moss);
-    margin:0 0 8px;
+    color:var(--river);
+    margin:0 0 9px;
   }
   .ff-info-body{
     font-size:14px;
@@ -665,14 +666,90 @@
   }
   .ff-restart{
     font-family:'IBM Plex Mono',monospace;
-    font-size:12px;
-    color:var(--ink-soft);
-    background:none;
+    font-size:13px;
+    font-weight:600;
+    letter-spacing:0.04em;
+    color:var(--parchment);
+    background:var(--river);
     border:none;
+    border-radius:10px;
     cursor:pointer;
-    text-decoration:underline;
-    padding:0;
+    padding:12px 20px;
+    margin-top:6px;
   }
+  .ff-restart:hover{background:var(--river-light);}
+  .ff-result-foot{
+    display:flex;
+    flex-wrap:wrap;
+    gap:10px;
+    align-items:center;
+    margin-top:8px;
+  }
+  .ff-foot-btn{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:12px;
+    color:var(--brass-dark);
+    background:none;
+    border:1px solid var(--brass);
+    border-radius:10px;
+    cursor:pointer;
+    padding:11px 16px;
+  }
+  /* Ask the guide — a real chat panel */
+  .ff-ask-card{
+    border:1.5px solid var(--brass);
+    background:#FCF6E4;
+  }
+  .ff-ask-title{
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    font-size:20px;
+    color:var(--river);
+    margin:0 0 4px;
+  }
+  .ff-ask-sub{
+    font-size:12.5px;
+    color:var(--ink-soft);
+    margin:0 0 12px;
+  }
+  #askThread{
+    max-height:460px;
+    overflow-y:auto;
+    margin-bottom:10px;
+  }
+  #askThread:empty{margin-bottom:0;}
+  .ff-ask-row{
+    display:flex;
+    gap:8px;
+    align-items:flex-end;
+  }
+  .ff-ask-input{
+    flex:1;
+    box-sizing:border-box;
+    font-family:'Inter',sans-serif;
+    font-size:14px;
+    border:1px solid var(--parchment-dim);
+    border-radius:10px;
+    padding:11px;
+    min-height:46px;
+    max-height:120px;
+    resize:none;
+    background:#fff;
+  }
+  .ff-ask-send{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:13px;
+    font-weight:600;
+    color:var(--parchment);
+    background:var(--river);
+    border:none;
+    border-radius:10px;
+    cursor:pointer;
+    padding:0 18px;
+    height:46px;
+    white-space:nowrap;
+  }
+  .ff-ask-send:disabled{opacity:0.55;cursor:default;}
   @media (max-width:420px){
     .ff-options{grid-template-columns:1fr;}
     .ff-gear-grid{grid-template-columns:1fr;}
@@ -823,7 +900,11 @@
 
   <div class="ff-step" data-step="5">
     <div class="ff-result" id="resultBox"></div>
-    <button class="ff-restart" id="restartBtn">start over</button>
+    <div class="ff-result-foot">
+      <button class="ff-restart" id="restartBtn" type="button">↺ Start over</button>
+      <button class="ff-foot-btn" id="downloadBtn" type="button">⤓ Download this plan</button>
+      <button class="ff-foot-btn" id="feedbackBtn" type="button">✎ Feedback</button>
+    </div>
   </div>
 </div>
 
@@ -838,6 +919,7 @@
   var state = {location:null, notes:null, aiRefine:null, recentWeather:null, gauge:null, tide:null, bestWindow:null, access:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
   var currentStep = 0;
   var resultMap = null;
+  var lastRec = null;
 
   var speciesInfo = {
     trout:     {label:'Trout', hint:'stream or stocked', cold:true},
@@ -2030,7 +2112,9 @@
   });
 
   document.getElementById('restartBtn').addEventListener('click', function(){
+    saveChatHistory();
     state = {location:null, notes:null, aiRefine:null, recentWeather:null, gauge:null, tide:null, bestWindow:null, access:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
+    lastRec = null;
     document.querySelectorAll('.ff-opt, .ff-chip, .ff-dir').forEach(function(b){ b.classList.remove('selected'); });
     document.getElementById('locateStatus').textContent = '';
     document.getElementById('gaugeStatus').textContent = '';
@@ -2043,6 +2127,25 @@
     document.getElementById('planStatus').textContent = '';
     updateMySpotsBtn();
     goToStep(0);
+    scrollToApp(); // don't leave them stranded at the bottom of the page
+  });
+
+  document.getElementById('downloadBtn').addEventListener('click', downloadPlan);
+
+  document.getElementById('feedbackBtn').addEventListener('click', function(){
+    var msg = window.prompt('What do you think of Fly Finder? Bugs, ideas, what worked — anything helps:');
+    if(msg == null) return;
+    msg = msg.trim();
+    if(!msg) return;
+    var btn = document.getElementById('feedbackBtn');
+    btn.textContent = 'Sending…';
+    var payload = {message: msg, spot: state.location && state.location.name, ts: new Date().toISOString()};
+    (function attempt(i){
+      if(i >= REFINE_URLS.length){ btn.textContent = '✎ Feedback'; window.alert('Couldn\'t send just now — please try again later.'); return; }
+      fetch(REFINE_URLS[i] + '/feedback', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(payload)})
+        .then(function(r){ if(!r.ok) throw new Error('bad'); btn.textContent = 'Thanks! ✓'; })
+        .catch(function(){ attempt(i + 1); });
+    })(0);
   });
 
   document.getElementById('locateBtn').addEventListener('click', function(){
@@ -2540,6 +2643,7 @@
 
   function renderResult(){
     var rec = recommendFly();
+    lastRec = rec;
     var gear = gearFor(rec);
     var forage = seasonalForage();
     var method = methodTip();
@@ -2683,10 +2787,13 @@
     }
 
     if(REFINE_URLS.length){
-      html += '<div class="ff-info-card"><p class="ff-info-label">Ask the guide</p>' +
+      html += '<div class="ff-info-card ff-ask-card"><p class="ff-ask-title">Ask the guide</p>' +
+        '<p class="ff-ask-sub">Chat about this spot — conditions, tactics, where to go, what to avoid. Ask follow-ups anytime.</p>' +
         '<div id="askThread"></div>' +
-        '<textarea class="ff-trip-note" id="askInput" placeholder="e.g. It feels like 105° out — is it even worth fishing today? Where should I wade?"></textarea>' +
-        '<button class="ff-mini-btn" id="askBtn" type="button">Ask</button>' +
+        '<div class="ff-ask-row">' +
+        '<textarea class="ff-ask-input" id="askInput" rows="1" placeholder="Ask anything about fishing here today…"></textarea>' +
+        '<button class="ff-ask-send" id="askBtn" type="button">Ask</button>' +
+        '</div>' +
         '<p class="ff-spark-cap" id="askStatus"></p></div>';
     }
 
@@ -2713,6 +2820,72 @@
   }
   function saveList(key, list){
     try{ localStorage.setItem(key, JSON.stringify(list)); }catch(e){}
+  }
+
+  // a plain-text plan + conversation the angler can keep or share
+  function buildPlanText(){
+    var L = [];
+    var loc = state.location || {};
+    L.push('FLY FINDER — ' + (loc.name || 'your water') + (loc.region ? ', ' + loc.region : ''));
+    L.push(new Date().toLocaleString());
+    L.push('');
+    var g = state.gauge || {};
+    var cond = [];
+    if(g.waterTempF != null) cond.push('water ' + g.waterTempF + '°F');
+    if(state.sky) cond.push(state.sky);
+    if(state.windSpeed) cond.push(state.windSpeed + (state.windDir ? ' ' + state.windDir : ''));
+    if(g.flow != null) cond.push(Math.round(g.flow) + ' cfs' + (g.trend ? ' (' + g.trend + ')' : ''));
+    if(cond.length) L.push('Conditions: ' + cond.join(' · '));
+    if(lastRec){
+      L.push('Fly: ' + lastRec.primary + ' — ' + lastRec.color);
+      L.push('Why: ' + lastRec.reasoning);
+    }
+    if(state.askChat && state.askChat.length){
+      L.push('');
+      L.push('— Guide conversation —');
+      state.askChat.forEach(function(m){
+        L.push((m.role === 'user' ? 'You: ' : 'Guide: ') + m.content);
+        L.push('');
+      });
+    }
+    L.push('flyfishinguniverse.com/pages/fly-finder');
+    return L.join('\n');
+  }
+  function downloadPlan(){
+    var blob = new Blob([buildPlanText()], {type: 'text/plain'});
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement('a');
+    var loc = (state.location && state.location.name) || 'water';
+    a.href = url;
+    a.download = 'fly-finder-' + loc.toLowerCase().replace(/[^a-z0-9]+/g, '-') + '.txt';
+    document.body.appendChild(a); a.click(); document.body.removeChild(a);
+    setTimeout(function(){ URL.revokeObjectURL(url); }, 1000);
+  }
+
+  // remember conversations on this device so they can be revisited (no login)
+  function saveChatHistory(){
+    if(!state.location || !state.askChat || !state.askChat.length) return;
+    var chats = loadList('ffChats');
+    var key = state.location.name + '@' + state.location.lat.toFixed(3) + '|' + (state.species || '');
+    chats = chats.filter(function(c){ return c.key !== key; });
+    chats.unshift({
+      key: key,
+      date: new Date().toISOString(),
+      name: state.location.name,
+      region: state.location.region,
+      species: state.species,
+      fly: lastRec ? lastRec.primary : null,
+      chat: state.askChat.slice(-20)
+    });
+    saveList('ffChats', chats.slice(0, 30));
+  }
+
+  // ask the embedding page (the shop) to scroll the tool back into view
+  function scrollToApp(){
+    try{ window.scrollTo(0, 0); }catch(e){}
+    if(window.parent !== window){
+      window.parent.postMessage({ffScrollTop: true}, '*');
+    }
   }
 
   // swap the stylized fly medallion for the ACTUAL fly — the real product
@@ -2778,17 +2951,19 @@
           }
         });
         thread.innerHTML = h;
+        thread.scrollTop = thread.scrollHeight; // keep the latest message in view
       };
       renderAskThread();
-      askBtn.addEventListener('click', function(){
-        var input = document.getElementById('askInput');
-        var statusEl = document.getElementById('askStatus');
+      var input = document.getElementById('askInput');
+      var statusEl = document.getElementById('askStatus');
+      function submitAsk(){
         var q = input.value.trim();
-        if(!q) return;
+        if(!q || askBtn.disabled) return;
         state.askChat.push({role: 'user', content: q});
         renderAskThread();
         input.value = '';
-        statusEl.textContent = 'The guide is thinking...';
+        input.style.height = '';
+        statusEl.textContent = 'The guide is thinking…';
         askBtn.disabled = true;
         var ctx = buildGuideContext();
         (function attempt(i){
@@ -2812,8 +2987,18 @@
             statusEl.textContent = '';
             askBtn.disabled = false;
             input.focus();
+            saveChatHistory(); // remember this conversation on this device
           }).catch(function(){ attempt(i + 1); });
         })(0);
+      }
+      askBtn.addEventListener('click', submitAsk);
+      // Enter sends, Shift+Enter makes a newline — like a real chat box
+      input.addEventListener('keydown', function(e){
+        if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); submitAsk(); }
+      });
+      input.addEventListener('input', function(){
+        input.style.height = 'auto';
+        input.style.height = Math.min(input.scrollHeight, 120) + 'px';
       });
     }
     document.getElementById('tripSaveBtn').addEventListener('click', function(){

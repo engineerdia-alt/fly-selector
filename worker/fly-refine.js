@@ -157,7 +157,36 @@ export default {
       return res;
     }
 
+    // read collected feedback (owner only, via ?key=ANTHROPIC_API_KEY)
+    if (request.method === 'GET' && url.pathname === '/feedback') {
+      if (!env.FEEDBACK) return new Response('feedback store not configured', { status: 500, headers: cors });
+      if (url.searchParams.get('key') !== env.ANTHROPIC_API_KEY) {
+        return new Response('unauthorized', { status: 401, headers: cors });
+      }
+      const list = await env.FEEDBACK.list({ prefix: 'fb:', limit: 200 });
+      const items = [];
+      for (const k of list.keys) {
+        const v = await env.FEEDBACK.get(k.name);
+        if (v) items.push(JSON.parse(v));
+      }
+      return new Response(JSON.stringify({ count: items.length, items }, null, 2), {
+        headers: { ...cors, 'Content-Type': 'application/json' }
+      });
+    }
+
     if (request.method !== 'POST') return new Response('POST only', { status: 405, headers: cors });
+
+    // collect angler feedback
+    if (url.pathname === '/feedback') {
+      if (!env.FEEDBACK) return new Response('feedback store not configured', { status: 500, headers: cors });
+      let fb;
+      try { fb = await request.json(); } catch (e) { return new Response('bad json', { status: 400, headers: cors }); }
+      const message = String((fb && fb.message) || '').slice(0, 2000).trim();
+      if (!message) return new Response('empty', { status: 400, headers: cors });
+      const rec = { message, spot: String((fb && fb.spot) || '').slice(0, 120), ts: new Date().toISOString() };
+      await env.FEEDBACK.put('fb:' + Date.now() + ':' + Math.random().toString(36).slice(2, 8), JSON.stringify(rec));
+      return new Response(JSON.stringify({ ok: true }), { headers: { ...cors, 'Content-Type': 'application/json' } });
+    }
 
     let body;
     try { body = await request.json(); } catch (e) {
