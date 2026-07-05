@@ -9,6 +9,8 @@
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,500;9..144,600&family=Inter:wght@400;500;600&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<link rel="stylesheet" href="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.css">
+<script src="https://unpkg.com/maplibre-gl@4.7.1/dist/maplibre-gl.js"></script>
 <style>
   :root{
     /* greens & creams matched to the flyfishinguniverse.com theme
@@ -522,13 +524,62 @@
     z-index:1000;
     background:var(--parchment);
   }
-  .ff-explore.open{display:block;}
+  .ff-explore.open{display:flex;}
+  .ff-explore-side{
+    width:340px;
+    max-width:40%;
+    background:var(--parchment);
+    border-right:1px solid var(--parchment-dim);
+    display:flex;
+    flex-direction:column;
+    overflow:hidden;
+  }
+  .ff-explore-side-head{padding:18px 18px 12px;border-bottom:1px solid var(--parchment-dim);}
+  .ff-explore-title{font-family:'Fraunces',serif;font-weight:600;font-size:20px;color:var(--river);margin:0;}
+  .ff-explore-count{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--ink-soft);margin:4px 0 0;}
+  .ff-explore-list{flex:1;overflow-y:auto;padding:12px;}
+  .ff-dest-card{
+    background:#fff;
+    border:1px solid var(--parchment-dim);
+    border-radius:12px;
+    padding:13px;
+    margin-bottom:10px;
+    cursor:pointer;
+    transition:border-color .15s;
+  }
+  .ff-dest-card:hover{border-color:var(--brass);}
+  .ff-dest-card h4{font-family:'Fraunces',serif;font-weight:600;font-size:16px;color:var(--river);margin:0 0 2px;}
+  .ff-dest-card .loc{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--moss);margin:0 0 7px;}
+  .ff-dest-card p{font-size:12.5px;line-height:1.45;color:var(--ink);margin:0 0 9px;}
+  .ff-dest-tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;}
+  .ff-dest-tag{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--brass-dark);background:var(--parchment-dim);border-radius:20px;padding:3px 9px;}
+  .ff-dest-go{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:var(--parchment);background:var(--river);border:none;border-radius:8px;padding:9px 14px;cursor:pointer;}
+  .ff-explore-empty{font-size:13px;color:var(--ink-soft);padding:16px 6px;line-height:1.5;}
+  .ff-explore-mapwrap{position:relative;flex:1;}
   #exploreMap{position:absolute;inset:0;}
+  .ff-explore-filters{
+    position:absolute;top:14px;left:14px;z-index:5;display:flex;gap:8px;flex-wrap:wrap;
+  }
+  .ff-filter-chip{
+    font-family:'IBM Plex Mono',monospace;font-size:12px;
+    background:rgba(242,236,221,0.94);color:var(--ink-soft);
+    border:1px solid var(--parchment-dim);border-radius:20px;padding:8px 13px;cursor:pointer;
+    box-shadow:0 1px 5px rgba(0,0,0,0.12);
+  }
+  .ff-filter-chip.active{background:var(--river);color:var(--parchment);border-color:var(--river);}
+  .ff-dest-dot{
+    width:15px;height:15px;background:var(--rust);border:2px solid var(--parchment);
+    transform:rotate(45deg);cursor:pointer;box-shadow:0 1px 4px rgba(0,0,0,0.3);
+  }
+  .ff-poi-dot{
+    width:11px;height:11px;border-radius:50%;background:var(--brass);border:2px solid var(--parchment);
+    cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,0.3);
+  }
   .ff-explore-close{
     position:absolute;
     top:14px;
     right:14px;
-    z-index:1001;
+    z-index:6;
     font-family:'IBM Plex Mono',monospace;
     font-size:13px;
     background:var(--river);
@@ -544,7 +595,7 @@
     bottom:18px;
     left:50%;
     transform:translateX(-50%);
-    z-index:1001;
+    z-index:5;
     font-family:'IBM Plex Mono',monospace;
     font-size:11px;
     color:var(--ink);
@@ -552,9 +603,14 @@
     border-radius:8px;
     padding:7px 12px;
     margin:0;
-    max-width:90%;
+    max-width:80%;
     text-align:center;
     box-shadow:0 2px 8px rgba(0,0,0,0.15);
+  }
+  @media (max-width:640px){
+    .ff-explore.open{flex-direction:column-reverse;}
+    .ff-explore-side{width:100%;max-width:100%;height:44%;border-right:none;border-top:1px solid var(--parchment-dim);}
+    .ff-explore-mapwrap{flex:1;}
   }
   .ff-spark{
     width:100%;
@@ -1001,9 +1057,22 @@
 </div>
 
 <div class="ff-explore" id="exploreOverlay">
-  <div id="exploreMap"></div>
-  <button class="ff-explore-close" id="exploreClose" type="button">&#10005; close map</button>
-  <p class="ff-explore-hint" id="exploreHint">Rust dots are storied waters with local notes. Zoom in to load boat launches and fishing access anywhere.</p>
+  <aside class="ff-explore-side" id="exploreSide">
+    <div class="ff-explore-side-head">
+      <p class="ff-explore-title">Explore destinations</p>
+      <p class="ff-explore-count" id="exploreCount">Move the map to see waters here</p>
+    </div>
+    <div class="ff-explore-list" id="exploreList"></div>
+  </aside>
+  <div class="ff-explore-mapwrap">
+    <div id="exploreMap"></div>
+    <div class="ff-explore-filters" id="exploreFilters">
+      <button class="ff-filter-chip active" data-filter="dest" type="button">&#9670; Storied waters</button>
+      <button class="ff-filter-chip active" data-filter="poi" type="button">&#9875; Access points</button>
+    </div>
+    <button class="ff-explore-close" id="exploreClose" type="button">&#10005; Close</button>
+    <p class="ff-explore-hint" id="exploreHint">Every river and lake is on the map. Rust diamonds are storied waters with local notes — zoom in to load boat launches and fishing access anywhere.</p>
+  </div>
 </div>
 
 <script>
@@ -3476,9 +3545,13 @@
   }
 
   // ---- full-screen explore map ----
+  // ---- full-screen explore map (MapLibre GL vector: every river & lake) ----
   var exploreMap = null;
   var exploreSeen = {};
   var exploreTimer = null;
+  var destMarkers = [];   // {marker, note}
+  var poiMarkers = [];    // maplibregl.Marker
+  var exploreFilters = {dest: true, poi: true};
 
   function fishHere(name, lat, lon, stateName, notes){
     state.location = {name: name, region: stateName || '', state: stateName || null, lat: lat, lon: lon, country: stateName ? 'United States' : null};
@@ -3491,31 +3564,72 @@
     proceedFromLocation();
   }
 
-  function fishHerePopup(title, sub, lat, lon, stateName, notes){
+  function mlPopup(node){ return new maplibregl.Popup({offset:16, closeButton:true, maxWidth:'250px'}).setDOMContent(node); }
+
+  function fishHereNode(title, sub, lat, lon, stateName, notes){
     var div = document.createElement('div');
     div.className = 'ff-map-popup';
     div.innerHTML = '<strong>' + title + '</strong>' + (sub ? '<br>' + sub : '') + '<br>';
     var b = document.createElement('button');
-    b.type = 'button';
-    b.className = 'ff-popup-btn';
-    b.textContent = 'Fish here →';
+    b.type = 'button'; b.className = 'ff-popup-btn'; b.textContent = 'Fish here →';
     b.addEventListener('click', function(){ fishHere(title, lat, lon, stateName, notes); });
     div.appendChild(b);
     return div;
   }
 
-  function exploreFetch(){
-    var hint = document.getElementById('exploreHint');
-    if(exploreMap.getZoom() < 10){
-      hint.textContent = 'Rust dots are storied waters with local notes. Zoom in to load boat launches and fishing access anywhere.';
+  function speciesLabel(k){ return (speciesInfo[k] && speciesInfo[k].label) || k; }
+
+  // sidebar: storied waters currently within the map view (like DIY's list)
+  function updateExploreSidebar(){
+    var listEl = document.getElementById('exploreList');
+    var countEl = document.getElementById('exploreCount');
+    if(!exploreMap || !listEl) return;
+    var b = exploreMap.getBounds();
+    var inView = exploreFilters.dest ? WATER_NOTES.filter(function(n){
+      return n.lat <= b.getNorth() && n.lat >= b.getSouth() && n.lon <= b.getEast() && n.lon >= b.getWest();
+    }) : [];
+    countEl.textContent = inView.length + ' storied water' + (inView.length === 1 ? '' : 's') + ' in view · ' + WATER_NOTES.length + ' curated';
+    if(!inView.length){
+      listEl.innerHTML = '<p class="ff-explore-empty">No curated waters in this view — but every river and lake is still on the map. Zoom in and tap any access point to fish it.</p>';
       return;
     }
+    listEl.innerHTML = '';
+    inView.forEach(function(n){
+      var card = document.createElement('div');
+      card.className = 'ff-dest-card';
+      var tags = (n.species || []).slice(0, 4).map(function(s){ return '<span class="ff-dest-tag">' + speciesLabel(s) + '</span>'; }).join('');
+      card.innerHTML = '<h4>' + n.name + '</h4><p class="loc">' + (n.state || '') + '</p>' +
+        '<p>' + (n.hook || '').slice(0, 160) + '</p>' +
+        (tags ? '<div class="ff-dest-tags">' + tags + '</div>' : '') +
+        '<button class="ff-dest-go" type="button">Fish here →</button>';
+      card.addEventListener('click', function(ev){
+        if(ev.target && ev.target.classList.contains('ff-dest-go')){ fishHere(n.name, n.lat, n.lon, n.state, n); return; }
+        exploreMap.flyTo({center: [n.lon, n.lat], zoom: Math.max(exploreMap.getZoom(), 11)});
+      });
+      listEl.appendChild(card);
+    });
+  }
+
+  function applyExploreFilters(){
+    destMarkers.forEach(function(d){ d.marker.getElement().style.display = exploreFilters.dest ? '' : 'none'; });
+    poiMarkers.forEach(function(m){ m.getElement().style.display = exploreFilters.poi ? '' : 'none'; });
+    updateExploreSidebar();
+  }
+
+  function exploreFetch(){
+    updateExploreSidebar();
+    var hint = document.getElementById('exploreHint');
+    if(exploreMap.getZoom() < 10){
+      hint.textContent = 'Every river and lake is on the map. Rust diamonds are storied waters — zoom in to load boat launches and access.';
+      return;
+    }
+    if(!exploreFilters.poi){ hint.textContent = 'Access points hidden — tap the filter to show them.'; return; }
     if(exploreTimer) clearTimeout(exploreTimer);
     exploreTimer = setTimeout(function(){
       var b = exploreMap.getBounds();
       var box = b.getSouth() + ',' + b.getWest() + ',' + b.getNorth() + ',' + b.getEast();
       var q = '[out:json][timeout:20];(nwr["leisure"="slipway"](' + box + ');nwr["leisure"="fishing"](' + box + '););out center tags 120;';
-      hint.textContent = 'Loading access points...';
+      hint.textContent = 'Loading access points…';
       overpassFetch(q).then(function(data){
         var added = 0;
         (data.elements || []).forEach(function(e){
@@ -3524,47 +3638,61 @@
           var elat = e.lat != null ? e.lat : (e.center && e.center.lat);
           var elon = e.lon != null ? e.lon : (e.center && e.center.lon);
           if(elat == null) return;
-          exploreSeen[id] = true;
-          added++;
+          exploreSeen[id] = true; added++;
           var t = e.tags || {};
           var kind = t.leisure === 'slipway' ? 'Boat / canoe launch' : 'Fishing access';
-          var m = L.circleMarker([elat, elon], {radius:6, color:'#8C6A38', fillColor:'#B58A4A', fillOpacity:0.9});
-          m.bindPopup(function(){ return fishHerePopup(t.name || kind, kind, elat, elon, null, null); }).addTo(exploreMap);
+          var el = document.createElement('div'); el.className = 'ff-poi-dot';
+          if(!exploreFilters.poi) el.style.display = 'none';
+          var mk = new maplibregl.Marker({element: el}).setLngLat([elon, elat])
+            .setPopup(mlPopup(fishHereNode(t.name || kind, kind, elat, elon, null, null))).addTo(exploreMap);
+          poiMarkers.push(mk);
         });
-        hint.textContent = added ? 'Tap a dot, then "Fish here" to build a plan for that spot.' : 'No mapped access in this view — pan around or zoom elsewhere.';
-      }).catch(function(){
-        hint.textContent = 'Couldn\'t load access points right now — try panning again in a moment.';
-      });
+        hint.textContent = added ? 'Tap a dot → "Fish here" to build a plan for that spot.' : 'No mapped access in this view — pan or zoom elsewhere.';
+      }).catch(function(){ hint.textContent = 'Couldn\'t load access points — try again in a moment.'; });
     }, 600);
   }
 
   function openExplore(){
     document.getElementById('exploreOverlay').classList.add('open');
     setTimeout(function(){
-      if(exploreMap){
-        exploreMap.invalidateSize();
-        return;
-      }
-      exploreMap = L.map('exploreMap');
-      L.tileLayer('https://maps.geoapify.com/v1/tile/osm-bright/{z}/{x}/{y}.png?apiKey=' + GEOAPIFY_KEY, {
-        attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://www.geoapify.com/">Geoapify</a>',
-        maxZoom: 19
-      }).addTo(exploreMap);
-      if(ipBias){
-        var parts = ipBias.split(',');
-        exploreMap.setView([parseFloat(parts[1]), parseFloat(parts[0])], 9);
-      } else {
-        exploreMap.setView([39.8, -98.5], 4);
-      }
-      WATER_NOTES.forEach(function(n){
-        var m = L.circleMarker([n.lat, n.lon], {radius:8, color:'#A9512E', fillColor:'#A9512E', fillOpacity:0.9});
-        m.bindPopup(function(){ return fishHerePopup(n.name, n.state + ' · storied water with local notes', n.lat, n.lon, n.state, n); }).addTo(exploreMap);
+      if(exploreMap){ exploreMap.resize(); updateExploreSidebar(); return; }
+      var center = [-98.5, 39.8], zoom = 4;
+      if(ipBias){ var p = ipBias.split(','); center = [parseFloat(p[0]), parseFloat(p[1])]; zoom = 9; }
+      exploreMap = new maplibregl.Map({
+        container: 'exploreMap',
+        style: 'https://maps.geoapify.com/v1/styles/osm-bright/style.json?apiKey=' + GEOAPIFY_KEY,
+        center: center, zoom: zoom
       });
-      exploreMap.on('moveend zoomend', exploreFetch);
-      window.__ffExploreMap = exploreMap;
-      exploreFetch();
+      exploreMap.addControl(new maplibregl.NavigationControl({showCompass: false}), 'bottom-right');
+      exploreMap.on('error', function(e){ window.__ffMapErr = (e && e.error && e.error.message) || 'map error'; });
+      function addExploreMarkers(){
+        if(destMarkers.length) return;
+        WATER_NOTES.forEach(function(n){
+          var el = document.createElement('div'); el.className = 'ff-dest-dot';
+          var mk = new maplibregl.Marker({element: el}).setLngLat([n.lon, n.lat])
+            .setPopup(mlPopup(fishHereNode(n.name, n.state + ' · storied water with local notes', n.lat, n.lon, n.state, n))).addTo(exploreMap);
+          destMarkers.push({marker: mk, note: n});
+        });
+        window.__ffExploreMap = exploreMap;
+        exploreFetch();
+      }
+      // markers don't need the style fully painted — add once the map is ready,
+      // and don't hang forever if a slow tile source delays 'load'
+      exploreMap.on('load', addExploreMarkers);
+      setTimeout(addExploreMarkers, 2500);
+      exploreMap.on('moveend', exploreFetch);
     }, 60);
   }
+
+  document.querySelectorAll('.ff-filter-chip').forEach(function(chip){
+    chip.addEventListener('click', function(){
+      var f = chip.dataset.filter;
+      exploreFilters[f] = !exploreFilters[f];
+      chip.classList.toggle('active', exploreFilters[f]);
+      applyExploreFilters();
+      if(f === 'poi' && exploreFilters.poi && exploreMap) exploreFetch();
+    });
+  });
 
   document.getElementById('exploreBtn').addEventListener('click', openExplore);
   document.getElementById('mySpotsBtn').addEventListener('click', showMySpots);
