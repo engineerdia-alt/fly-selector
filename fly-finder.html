@@ -640,6 +640,43 @@
     margin:8px 0;
     min-height:56px;
   }
+  .ff-flybox-note{
+    font-size:12.5px;
+    color:var(--ink-soft);
+    margin:0 0 12px;
+    line-height:1.5;
+  }
+  .ff-flybox-cat{
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    font-weight:600;
+    text-transform:uppercase;
+    letter-spacing:0.05em;
+    color:var(--brass-dark);
+    margin:14px 0 8px;
+  }
+  .ff-flybox-grid{
+    display:grid;
+    grid-template-columns:1fr 1fr;
+    gap:7px;
+  }
+  .ff-flybox-item{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    gap:6px;
+    text-decoration:none;
+    background:var(--parchment-dim);
+    border-radius:8px;
+    padding:9px 11px;
+    color:var(--ink);
+  }
+  .ff-flybox-item:hover{background:#F0E6C8;}
+  .ff-flybox-item .fn{font-size:13px;font-weight:500;}
+  .ff-flybox-item .fs{font-family:'IBM Plex Mono',monospace;font-size:11px;color:var(--moss);white-space:nowrap;}
+  @media (max-width:420px){
+    .ff-flybox-grid{grid-template-columns:1fr;}
+  }
   .ff-card-alts{
     margin-top:14px;
     padding-top:12px;
@@ -765,19 +802,46 @@
 
   <div class="ff-hero" id="hero" aria-hidden="true">
     <svg viewBox="0 0 800 180" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <linearGradient id="troutG" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stop-color="var(--river-light)"/>
+          <stop offset="0.55" stop-color="var(--moss)"/>
+          <stop offset="1" stop-color="#D3CFB2"/>
+        </linearGradient>
+      </defs>
       <rect width="800" height="180" fill="var(--parchment-dim)"/>
-      <circle cx="650" cy="52" r="30" fill="var(--brass)" opacity="0.85"/>
-      <path d="M0 92 q120 -40 260 -18 q160 26 300 -6 q140 -30 240 4 V180 H0 Z" fill="var(--moss)" opacity="0.55"/>
-      <path d="M0 120 q160 -30 320 -6 q180 26 480 -12 V180 H0 Z" fill="var(--river-light)" opacity="0.8"/>
-      <path d="M0 150 q200 -22 420 -4 q200 16 380 -8 V180 H0 Z" fill="var(--river)"/>
-      <path d="M120 168 q200 -34 380 -14 q140 16 300 -2" fill="none" stroke="var(--parchment)" stroke-width="2" opacity="0.35"/>
-      <g stroke="var(--river)" stroke-width="2" fill="none" opacity="0.9">
-        <path d="M300 26 q70 8 118 40"/>
+      <circle cx="672" cy="46" r="26" fill="var(--brass)" opacity="0.85"/>
+      <path d="M0 116 q170 -26 350 -6 q190 22 450 -10 V180 H0 Z" fill="var(--river-light)" opacity="0.7"/>
+      <path d="M0 146 q200 -20 420 -4 q200 14 380 -8 V180 H0 Z" fill="var(--river)"/>
+      <path d="M120 162 q200 -26 380 -10 q120 12 300 -2" fill="none" stroke="var(--parchment)" stroke-width="2" opacity="0.3"/>
+      <!-- splash where the trout broke the surface -->
+      <g fill="var(--parchment)" opacity="0.65">
+        <path d="M282 128 q-12 -24 -2 -38 q6 16 11 22 q6 -11 13 -15 q-2 18 -7 31z" opacity="0.5"/>
+        <circle cx="288" cy="120" r="4"/><circle cx="272" cy="107" r="3"/><circle cx="303" cy="103" r="2.6"/><circle cx="262" cy="121" r="2.2"/><circle cx="248" cy="112" r="1.8"/>
       </g>
-      <g transform="translate(300,26)">
-        <circle cx="0" cy="0" r="5" fill="var(--brass)"/>
-        <path d="M2 0 q22 -5 44 3 q-14 5 -26 10 q-10 -8 -18 -13z" fill="var(--river)"/>
-        <path d="M2 4 q-6 10 3 18 q6 -5 4 -12" fill="none" stroke="var(--brass)" stroke-width="2"/>
+      <!-- leader from the rod, down to the fly -->
+      <path d="M800 6 Q 570 18 492 42" fill="none" stroke="var(--river)" stroke-width="1.4" opacity="0.65"/>
+      <!-- the tied fly the trout is rising to -->
+      <g transform="translate(492,42)">
+        <circle cx="0" cy="0" r="4" fill="var(--brass)"/>
+        <path d="M1 0 q16 -4 30 2 q-9 4 -18 7 q-7 -6 -13 -9z" fill="var(--rust)"/>
+        <path d="M1 3 q-5 8 2 14 q5 -4 3 -10" fill="none" stroke="var(--brass)" stroke-width="1.6"/>
+      </g>
+      <!-- the leaping trout -->
+      <g>
+        <path d="M300,122 L276,105 L285,122 L276,141 Z" fill="var(--moss)"/>
+        <path d="M300,124 C 332,66 394,49 438,56 C 410,95 361,121 300,124 Z" fill="url(#troutG)" stroke="var(--river)" stroke-width="1"/>
+        <path d="M312,116 C 346,83 390,65 430,61" fill="none" stroke="var(--rust)" stroke-width="3" opacity="0.5" stroke-linecap="round"/>
+        <path d="M356,73 q10 -14 25 -14 q-6 11 -11 21z" fill="var(--moss)"/>
+        <path d="M322,95 q6 -6 13 -5 q-4 6 -6 10z" fill="var(--moss)"/>
+        <path d="M400,95 q4 12 -4 20 q-8 -6 -8 -16z" fill="var(--river-light)"/>
+        <g fill="var(--river)" opacity="0.55">
+          <circle cx="362" cy="79" r="2"/><circle cx="382" cy="75" r="1.8"/><circle cx="402" cy="73" r="1.6"/><circle cx="345" cy="92" r="1.8"/><circle cx="374" cy="90" r="1.6"/><circle cx="398" cy="85" r="1.5"/>
+        </g>
+        <path d="M420,65 q-6 8 -3 18" fill="none" stroke="var(--river)" stroke-width="1.2" opacity="0.55"/>
+        <circle cx="426" cy="65" r="3.4" fill="var(--parchment)"/>
+        <circle cx="427" cy="65" r="1.7" fill="var(--ink)"/>
+        <path d="M438,56 q8 -1 12 3" fill="none" stroke="var(--river)" stroke-width="1.4"/>
       </g>
     </svg>
   </div>
@@ -2181,6 +2245,71 @@
     return 'https://flyfishinguniverse.com/search?type=product&q=' + encodeURIComponent(term);
   }
 
+  // a full, categorized fly box per species (patterns + hook sizes), like a
+  // proper guide's "best flies" list — every entry links to the shop
+  var FLYBOX = {
+    trout: {
+      'Dry flies': [['Parachute Adams','12–22'],['Elk Hair Caddis','8–16'],['Blue-Winged Olive','16–22'],['Light Cahill','10–18'],['Parachute Sulphur','14–18'],['Griffith\'s Gnat','16–24'],['Stimulator','8–14'],['Chernobyl Ant','8–12'],['Royal Wulff','10–16'],['Yellow Humpy','10–18']],
+      'Nymphs': [['Pheasant Tail','12–20'],['BH Hare\'s Ear','12–20'],['Zebra Midge','16–22'],['Copper John','12–18'],['Prince Nymph','12–16'],['Rainbow Warrior','14–22'],['Pat\'s Rubber Legs','4–12'],['Golden Stonefly','6–10'],['WD-40','16–20'],['Y2K Egg','12–16']],
+      'Streamers': [['Woolly Bugger','2–10'],['Muddler Minnow','4–10'],['Sculpzilla','4–6'],['Zonker','4–8'],['Mickey Finn','6–10']]
+    },
+    steelhead: {
+      'Egg & nymph': [['Egg pattern','8–14'],['Estaz Egg','8–12'],['Nuke Egg','10–14'],['Stonefly Nymph','4–10'],['Copper John','10–16'],['Hare\'s Ear','10–16']],
+      'Swing flies': [['Intruder','1/0–4'],['Egg-Sucking Leech','2–8'],['Woolly Bugger','2–8'],['String Leech','2–6']],
+      'Attractors': [['Steelhead Hammer','8–12'],['Glo Bug','8–14']]
+    },
+    bass: {
+      'Topwater': [['Popper','2–8'],['Gurgler','2–6'],['Frog pattern','2–6'],['Dahlberg Diver','2–6']],
+      'Streamers': [['Woolly Bugger','2–8'],['Clouser Minnow','2–6'],['Half & Half','1/0–4'],['Game Changer','2–6'],['Murdich Minnow','1/0–4']],
+      'Subsurface': [['Crayfish pattern','4–10'],['Near Nuff Crayfish','4–8'],['Leech','4–10']]
+    },
+    pike: {
+      'Big streamers': [['Bucktail Deceiver','3/0–1'],['Pike Bunny','3/0–1'],['Double Bunny','2/0–2'],['Dahlberg Diver','2/0–2'],['Game Changer','2/0–2'],['Flashtail Whistler','2/0–1']],
+      'Topwater': [['Pike Popper','2/0–2'],['Gurgler','1/0–2']]
+    },
+    panfish: {
+      'Wets & nymphs': [['Small Woolly Bugger','8–12'],['Hare\'s Ear','12–16'],['Copper John','14–18'],['Zebra Midge','16–20']],
+      'Dries & poppers': [['Foam Spider','10–14'],['Foam Beetle','12–16'],['Small Popper','8–12'],['Griffith\'s Gnat','16–20']]
+    },
+    carp: {
+      'Nymphs & worms': [['Backstabber','6–10'],['Hybrid Carp Fly','6–10'],['San Juan Worm','8–12'],['Pheasant Tail','10–14'],['Zebra Midge','16–20']],
+      'Crustaceans': [['Carp Crab','6–10'],['Clouser Swimming Nymph','6–10'],['Bonefish-style shrimp','6–10']]
+    },
+    striper: {
+      'Baitfish': [['Clouser Minnow','1/0–4'],['Lefty\'s Deceiver','2/0–2'],['Half & Half','1/0–2'],['Sand Eel','1/0–4'],['Surf Candy','2–1/0']],
+      'Topwater': [['Gurgler','1/0–2'],['Crease Fly','1/0–2']]
+    },
+    bluefish: {
+      'Durable baitfish': [['Deceiver','2/0–2'],['Surf Candy','1/0–2'],['Popper (wire ready)','1/0–2'],['Gurgler','1/0–2'],['Clouser Minnow','1/0–2']]
+    },
+    albie: {
+      'Small epoxy bait': [['Surf Candy','1–4'],['Gummy Minnow','1–4'],['Albie Whore','1–2'],['Clouser Minnow, small','2–6']]
+    },
+    redfish: {
+      'Crabs & shrimp': [['Redfish Crab','2–6'],['EP Shrimp','2–6'],['Kwan','2–6'],['Spoon Fly','2–4'],['EP Baitfish','1/0–4']]
+    }
+  };
+  // saltwater fallback bucket for the generic 'saltwater' species key
+  FLYBOX.saltwater = FLYBOX.striper;
+
+  function flyBoxHtml(){
+    var box = FLYBOX[state.species];
+    if(!box) return '';
+    var html = '<div class="ff-info-card"><p class="ff-info-label">The full fly box for ' +
+      ((speciesInfo[state.species] && speciesInfo[state.species].label.toLowerCase()) || 'this water') +
+      '</p><p class="ff-flybox-note">A complete carry list — tap any pattern to shop it. Sizes are a starting range; match the hatch and water.</p>';
+    Object.keys(box).forEach(function(cat){
+      html += '<p class="ff-flybox-cat">' + cat + '</p><div class="ff-flybox-grid">';
+      box[cat].forEach(function(f){
+        html += '<a class="ff-flybox-item" href="' + shopUrl(f[0]) + '" target="_top">' +
+          '<span class="fn">' + escapeHtml(f[0]) + '</span><span class="fs">#' + f[1] + '</span></a>';
+      });
+      html += '</div>';
+    });
+    html += '</div>';
+    return html;
+  }
+
   function recommendFly(){
     var s = state.species, t = state.temp, sky = state.sky;
     var primary, color, reasoning, term, secondaryLabel, secondaryUrl, lineType, alternates;
@@ -2684,6 +2813,8 @@
       html += '</div>';
     }
     html += '</div>';
+
+    html += flyBoxHtml();
 
     if(state.aiRefine && state.aiRefine.read){
       var aiBody = mdLite(state.aiRefine.read) +

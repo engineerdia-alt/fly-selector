@@ -12,7 +12,10 @@ const ALLOWED_ORIGINS = [
   'http://localhost:8791'
 ];
 
+// Sonnet for the reasoning-heavy guide + section reads; Haiku for cheap,
+// high-volume intent extraction
 const MODEL = 'claude-haiku-4-5-20251001';
+const SMART_MODEL = 'claude-sonnet-5';
 
 const REFINE_SYSTEM =
   'You are a fly fishing expert with detailed knowledge of North American fisheries. ' +
@@ -74,7 +77,7 @@ const GUIDE_SYSTEM =
 
 async function callAnthropic(env, opts) {
   const payload = {
-    model: MODEL,
+    model: opts.model || MODEL,
     max_tokens: opts.maxTokens,
     messages: opts.messages
   };
@@ -157,11 +160,12 @@ export default {
       return res;
     }
 
-    // read collected feedback (owner only, via ?key=ANTHROPIC_API_KEY)
+    // read collected feedback (owner only, via ?key=FEEDBACK_TOKEN — a
+    // separate password so the Anthropic key never rides in a URL)
     if (request.method === 'GET' && url.pathname === '/feedback') {
       if (!env.FEEDBACK) return new Response('feedback store not configured', { status: 500, headers: cors });
-      if (url.searchParams.get('key') !== env.ANTHROPIC_API_KEY) {
-        return new Response('unauthorized', { status: 401, headers: cors });
+      if (!env.FEEDBACK_TOKEN || url.searchParams.get('key') !== env.FEEDBACK_TOKEN) {
+        return new Response('unauthorized — set the FEEDBACK_TOKEN secret and use ?key=that', { status: 401, headers: cors });
       }
       const list = await env.FEEDBACK.list({ prefix: 'fb:', limit: 200 });
       const items = [];
@@ -243,7 +247,7 @@ export default {
       // it's answering — on follow-ups it was losing data buried turns back
       const li = msgs.length - 1;
       msgs[li] = { role: msgs[li].role, content: 'Current conditions & nearby access points (JSON): ' + ctx + '\n\nAngler asks: ' + msgs[li].content };
-      const ar = await callAnthropic(env, { system: GUIDE_SYSTEM, messages: msgs, maxTokens: 700 });
+      const ar = await callAnthropic(env, { model: SMART_MODEL, system: GUIDE_SYSTEM, messages: msgs, maxTokens: 900 });
       if (!ar.ok) {
         return new Response(JSON.stringify({ error: 'anthropic ' + ar.status }), {
           status: 502, headers: { ...cors, 'Content-Type': 'application/json' }
@@ -260,7 +264,7 @@ export default {
     }
 
     const cache = caches.default;
-    const cacheKey = new Request('https://cache.fly-finder.internal/v3/' + encodeURIComponent(
+    const cacheKey = new Request('https://cache.fly-finder.internal/v4/' + encodeURIComponent(
       [name, state || '', Math.round(lat * 20) / 20, Math.round(lon * 20) / 20, water || '', onWater || ''].join('|')
     ));
     const hit = await cache.match(cacheKey);
@@ -276,7 +280,7 @@ export default {
       (onWater ? ' — this spot is ON ' + onWater + '; identify the fishery as ' + onWater : '') + '. ' +
       'Candidate species keys: ' + (candidates || []).join(', ') + '.';
 
-    const r = await callAnthropic(env, { system: REFINE_SYSTEM, messages: [{ role: 'user', content: userMsg }], maxTokens: 400 });
+    const r = await callAnthropic(env, { model: SMART_MODEL, system: REFINE_SYSTEM, messages: [{ role: 'user', content: userMsg }], maxTokens: 400 });
     if (!r.ok) {
       return new Response(JSON.stringify({ error: 'anthropic ' + r.status, detail: r.body.error }), {
         status: 502, headers: { ...cors, 'Content-Type': 'application/json' }
