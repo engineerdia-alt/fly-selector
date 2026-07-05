@@ -406,6 +406,9 @@
     justify-content:center;
   }
   .ff-fly-thumb svg{width:44px;height:44px;}
+  .ff-fly-thumb.photo{background:none;overflow:hidden;}
+  .ff-fly-thumb.photo a{display:block;width:100%;height:100%;}
+  .ff-fly-thumb.photo img{width:100%;height:100%;object-fit:cover;display:block;}
   .ff-card-head .ff-card-fly,.ff-card-head .ff-card-color{margin:0;}
   .ff-card-fly{
     font-family:'Fraunces',serif;
@@ -1153,12 +1156,14 @@
 
   // rough IP-based location so search results rank nearby waters first
   var ipBias = null;
+  var ipState = null;
   fetch('https://api.geoapify.com/v1/ipinfo?apiKey=' + GEOAPIFY_KEY)
     .then(function(r){ return r.json(); })
     .then(function(d){
       if(d.location && d.location.longitude != null){
         ipBias = d.location.longitude + ',' + d.location.latitude;
       }
+      if(d.state && d.state.name) ipState = d.state.name;
     }).catch(function(){});
   function fmtTime(d){
     return d ? d.toLocaleTimeString([], {hour:'numeric', minute:'2-digit'}) : null;
@@ -1346,6 +1351,21 @@
      hatches:'Smallmouth from late April through October — topwater in summer low light. Carp on the impoundment flats in summer.',
      regs:'The trout water below the Proud Lake dam has special early-season rules; the rest is standard warm-water regs.',
      stretches:'Proud Lake to Milford for April browns; Hudson Mills to Delhi for smallmouth; below Belleville and Flat Rock dams on the lower river.'},
+    {name:'Rogue River', species:['trout', 'steelhead', 'bass', 'pike', 'panfish'], state:'Michigan', lat:43.121, lon:-85.560, match:'rogue\\s*river',
+     hook:'A tributary of the Grand near Rockford, north of Grand Rapids — a designated trout stream up top with a strong fall/spring steelhead run, and smallmouth in the warmer lower reaches.',
+     hatches:'Hendricksons and sulphurs May–June, caddis and hoppers through summer on the trout water. Steelhead run in from the Grand in fall and again in spring; summer runs warm and pushes trout to the coolest, shaded stretches.',
+     regs:'The designated trout portion around and above Rockford has gear/season rules — check the Michigan DNR trout guide for your exact stretch; the dam at Rockford is a key steelhead staging spot.',
+     stretches:'Above Rockford dam for stream trout; the dam area and downstream for staging steelhead; the lower, warmer river for summer smallmouth.'},
+    {name:'Paint Creek', species:['trout', 'bass', 'panfish'], state:'Michigan', lat:42.735, lon:-83.230, match:'paint\\s*creek',
+     hook:'Oakland County\'s designated coldwater trout stream, following the Paint Creek Trail through Rochester — small, wadeable, and stocked, with wild browns holding in the shaded stretches.',
+     hatches:'Blue-winged olives and Hendricksons in spring, sulphurs and caddis into early summer, terrestrials (ants, beetles, hoppers) in late summer. Summer heat is the real limiter — fish the cool dawn window.',
+     regs:'Designated trout stream with gear restrictions — large portions prohibit live bait and have catch-and-release / artificial-only rules. Verify the Michigan DNR regs for your section before fishing.',
+     stretches:'The trail crossings — Tienken Rd, Dutton Rd, Silverbell Rd, and the Cider Mill — give easy access; walk upstream from each for deeper, shaded pools.'},
+    {name:'Clinton River', species:['bass', 'trout', 'pike', 'panfish', 'carp'], state:'Michigan', lat:42.640, lon:-83.030, match:'clinton\\s*river',
+     hook:'Metro Detroit\'s other home water — a stocked trout section in the upper river near Yates, warming to a solid smallmouth and pike fishery through the middle and lower reaches to Lake St. Clair.',
+     hatches:'Trout on BWOs and caddis spring through early summer in the upper river; smallmouth and pike from May into fall lower down. Steelhead and salmon push up from Lake St. Clair in season.',
+     regs:'The Yates-area trout stretch has special regs; the rest is standard warm-water. Check the Michigan DNR guide for the Yates dam section.',
+     stretches:'The upper river near Yates for stocked trout; below the dams and through Clinton River Park for smallmouth and pike; the lower river and spillway for run fish.'},
     {name:'Madison River', species:['trout'], state:'Montana', lat:45.130, lon:-111.720, match:'madison',
      hook:'"The 50-mile riffle" — fast, bouldery water absolutely stuffed with browns and rainbows.',
      hatches:'Salmonflies late June–early July moving upstream day by day; hoppers in August; streamers in fall.',
@@ -1640,6 +1660,9 @@
     if(/\b(hills?|heights|estates?|village|manor|acres|watershed|subdivision|crossing|drive|road|court|lane|street|avenue|boulevard|circle|apartments?|school)\b/i.test(name)) score -= 40;
     var extra = name.split(/\s+/).length - (query ? query.split(/\s+/).length : 1);
     if(extra > 0) score -= extra * 4;
+    // local-first: surface waters in the angler's own state (a Michigan user
+    // searching "Rogue River" should see the Michigan one, not Oregon's)
+    if(ipState && r.state === ipState) score += 28;
     return score;
   }
 
@@ -2534,7 +2557,7 @@
     }
     html += conditionsBar();
     html += '<div class="ff-card">';
-    html += '<div class="ff-card-head"><div class="ff-fly-thumb">' + flyArt(flyCategory(rec.term)) + '</div>' +
+    html += '<div class="ff-card-head"><div class="ff-fly-thumb" id="flyThumb" data-term="' + escapeHtml(rec.term) + '">' + flyArt(flyCategory(rec.term)) + '</div>' +
             '<div><p class="ff-card-fly">' + rec.primary + '</p>' +
             '<p class="ff-card-color">Suggested color: ' + rec.color + '</p></div></div>';
     html += '<p class="ff-card-why">' + rec.reasoning + '</p>';
@@ -2692,7 +2715,38 @@
     try{ localStorage.setItem(key, JSON.stringify(list)); }catch(e){}
   }
 
+  // swap the stylized fly medallion for the ACTUAL fly — the real product
+  // photo from the shop — so anglers see the exact thing a trout would eat
+  function loadRealFly(term){
+    if(!REFINE_URLS.length || !term) return;
+    var thumb = document.getElementById('flyThumb');
+    if(!thumb) return;
+    (function attempt(i){
+      if(i >= REFINE_URLS.length) return;
+      fetch(REFINE_URLS[i] + '/fly-image?q=' + encodeURIComponent(term))
+        .then(function(r){ if(!r.ok) throw new Error('bad'); return r.json(); })
+        .then(function(d){
+          if(!d || !d.image) return;
+          var t = document.getElementById('flyThumb');
+          if(!t || t.dataset.term !== term) return; // result changed under us
+          var img = new Image();
+          img.onload = function(){
+            t.classList.add('photo');
+            t.innerHTML = '';
+            var a = document.createElement('a');
+            a.href = d.url; a.target = '_top';
+            a.title = d.title || 'Shop this fly';
+            a.appendChild(img);
+            t.appendChild(a);
+          };
+          img.alt = d.title || 'Recommended fly';
+          img.src = d.image;
+        }).catch(function(){ attempt(i + 1); });
+    })(0);
+  }
+
   function attachResultActions(rec){
+    loadRealFly(rec.term);
     var saveBtn = document.getElementById('saveSpotBtn');
     var logBtn = document.getElementById('logTripBtn');
     if(!saveBtn) return;

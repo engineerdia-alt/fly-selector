@@ -120,6 +120,43 @@ export default {
       return new Response(detail, { status: r.ok ? 200 : 502, headers: cors });
     }
 
+    // real product photo of a recommended fly, from the shop's predictive
+    // search — fetched server-side to dodge cross-origin, cached a day
+    if (request.method === 'GET' && url.pathname === '/fly-image') {
+      const q = url.searchParams.get('q');
+      if (!q) return new Response(JSON.stringify({}), { headers: { ...cors, 'Content-Type': 'application/json' } });
+      const cache = caches.default;
+      const ck = new Request('https://cache.fly-finder.internal/img/' + encodeURIComponent(q));
+      const hit = await cache.match(ck);
+      if (hit) {
+        const c = new Response(hit.body, hit);
+        Object.entries(cors).forEach(([k, v]) => c.headers.set(k, v));
+        return c;
+      }
+      let out = {};
+      try {
+        const shopResp = await fetch('https://flyfishinguniverse.com/search/suggest.json?q=' + encodeURIComponent(q) +
+          '&resources[type]=product&resources[limit]=5', { headers: { 'Accept': 'application/json' } });
+        const data = await shopResp.json();
+        const prods = (((data.resources || {}).results || {}).products) || [];
+        const p = prods.find(x => x.available) || prods[0];
+        if (p) {
+          const img = (p.featured_image && p.featured_image.url) || p.image || '';
+          out = {
+            title: p.title,
+            url: 'https://flyfishinguniverse.com' + String(p.url || '').split('?')[0],
+            image: img ? img + (img.indexOf('?') >= 0 ? '&' : '?') + 'width=480' : '',
+            price: p.price
+          };
+        }
+      } catch (e) { out = {}; }
+      const res = new Response(JSON.stringify(out), {
+        headers: { ...cors, 'Content-Type': 'application/json', 'Cache-Control': 'public, max-age=86400' }
+      });
+      await cache.put(ck, res.clone());
+      return res;
+    }
+
     if (request.method !== 'POST') return new Response('POST only', { status: 405, headers: cors });
 
     let body;
