@@ -553,7 +553,12 @@
   .ff-dest-card p{font-size:12.5px;line-height:1.45;color:var(--ink);margin:0 0 9px;}
   .ff-dest-tags{display:flex;flex-wrap:wrap;gap:5px;margin-bottom:10px;}
   .ff-dest-tag{font-family:'IBM Plex Mono',monospace;font-size:10px;color:var(--brass-dark);background:var(--parchment-dim);border-radius:20px;padding:3px 9px;}
+  .ff-dest-actions{display:flex;gap:8px;flex-wrap:wrap;}
   .ff-dest-go{font-family:'IBM Plex Mono',monospace;font-size:12px;font-weight:600;color:var(--parchment);background:var(--river);border:none;border-radius:8px;padding:9px 14px;cursor:pointer;}
+  .ff-dest-more{font-family:'IBM Plex Mono',monospace;font-size:12px;color:var(--brass-dark);background:none;border:1px solid var(--brass);border-radius:8px;padding:9px 12px;cursor:pointer;}
+  .ff-dest-detail{margin:2px 0 10px;border-top:1px solid var(--parchment-dim);padding-top:9px;}
+  .ff-dest-detail p{font-size:12px;line-height:1.5;color:var(--ink);margin:0 0 7px;}
+  .ff-dest-detail strong{color:var(--river);}
   .ff-explore-empty{font-size:13px;color:var(--ink-soft);padding:16px 6px;line-height:1.5;}
   .ff-explore-mapwrap{position:relative;flex:1;}
   #exploreMap{position:absolute;inset:0;}
@@ -3707,13 +3712,27 @@
     inView.forEach(function(n){
       var card = document.createElement('div');
       card.className = 'ff-dest-card';
-      var tags = (n.species || []).slice(0, 4).map(function(s){ return '<span class="ff-dest-tag">' + speciesLabel(s) + '</span>'; }).join('');
+      var tags = (n.species || []).slice(0, 5).map(function(s){ return '<span class="ff-dest-tag">' + speciesLabel(s) + '</span>'; }).join('');
+      var detail = '<div class="ff-dest-detail" style="display:none">' +
+        (n.hatches ? '<p><strong>Timing:</strong> ' + n.hatches + '</p>' : '') +
+        (n.regs ? '<p><strong>Regulations:</strong> ' + n.regs + ' Always verify with the state agency.</p>' : '') +
+        (n.stretches ? '<p><strong>Where to focus:</strong> ' + n.stretches + '</p>' : '') + '</div>';
       card.innerHTML = '<h4>' + n.name + '</h4><p class="loc">' + (n.state || '') + '</p>' +
-        '<p>' + (n.hook || '').slice(0, 160) + '</p>' +
+        '<p>' + (n.hook || '') + '</p>' +
         (tags ? '<div class="ff-dest-tags">' + tags + '</div>' : '') +
-        '<button class="ff-dest-go" type="button">Fish here →</button>';
+        detail +
+        '<div class="ff-dest-actions"><button class="ff-dest-go" type="button">Fish here →</button>' +
+        ((n.hatches || n.regs || n.stretches) ? '<button class="ff-dest-more" type="button">Details ▾</button>' : '') + '</div>';
       card.addEventListener('click', function(ev){
-        if(ev.target && ev.target.classList.contains('ff-dest-go')){ fishHere(n.name, n.lat, n.lon, n.state, n); return; }
+        var t = ev.target;
+        if(t && t.classList.contains('ff-dest-go')){ fishHere(n.name, n.lat, n.lon, n.state, n); return; }
+        if(t && t.classList.contains('ff-dest-more')){
+          var d = card.querySelector('.ff-dest-detail');
+          var open = d.style.display !== 'none';
+          d.style.display = open ? 'none' : 'block';
+          t.textContent = open ? 'Details ▾' : 'Hide ▴';
+          return;
+        }
         exploreMap.flyTo({center: [n.lon, n.lat], zoom: Math.max(exploreMap.getZoom(), 11)});
       });
       listEl.appendChild(card);
