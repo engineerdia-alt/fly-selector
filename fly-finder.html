@@ -324,6 +324,24 @@
     color:var(--river);
     margin:0 0 18px;
   }
+  .ff-map-legend{
+    display:flex;
+    flex-wrap:wrap;
+    align-items:center;
+    gap:4px 12px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    color:var(--ink-soft);
+    margin:8px 0 0;
+  }
+  .ff-map-legend .lg{
+    display:inline-block;
+    width:9px;
+    height:9px;
+    border-radius:50%;
+    margin-right:5px;
+    vertical-align:middle;
+  }
   .ff-map-load{
     font-family:'IBM Plex Mono',monospace;
     font-size:11px;
@@ -2612,7 +2630,11 @@
     }
 
     if(state.location && window.L){
-      html += '<div class="ff-info-card"><p class="ff-info-label">Map</p><div id="resultMap" class="ff-map"></div></div>';
+      html += '<div class="ff-info-card"><p class="ff-info-label">Map</p><div id="resultMap" class="ff-map"></div>' +
+        '<p class="ff-map-legend"><span class="lg" style="background:#16302B"></span>Your spot' +
+        '<span class="lg" style="background:#B58A4A"></span>Access &amp; launches' +
+        '<span class="lg" style="background:#4C6249"></span>Public land' +
+        '<span class="lg" style="background:#C0392B"></span>Gauge (red = high/rising)</p></div>';
     }
 
     if(state.location && state.location.state && state.location.country === 'United States'){
@@ -2889,9 +2911,13 @@
 
     var g = state.gauge;
     if(g && g.lat != null){
-      var gm = L.circleMarker([g.lat, g.lon], {radius:7, color:'#A9512E', fillColor:'#A9512E', fillOpacity:0.9});
+      // flag the gauge red when flow is spiking — high, dirty, risky to wade
+      var hazard = g.trend === 'rising' && g.trendPct != null && g.trendPct >= 50;
+      var gCol = hazard ? '#C0392B' : '#A9512E';
+      var gm = L.circleMarker([g.lat, g.lon], {radius: hazard ? 10 : 7, color:gCol, fillColor:gCol, fillOpacity:0.9});
+      var warn = hazard ? '<br><strong style="color:#C0392B">⚠ Rising fast (+' + g.trendPct + '% in 24h)</strong> — water may be high and muddy; wading can be dangerous.' : '';
       gm.bindPopup('<div class="ff-map-popup"><strong>USGS gauge</strong><br>' + g.name +
-        (g.flow != null ? '<br>' + Math.round(g.flow) + ' cfs' + (g.waterTempF != null ? ' · ' + g.waterTempF + '°F' : '') : '') +
+        (g.flow != null ? '<br>' + Math.round(g.flow) + ' cfs' + (g.waterTempF != null ? ' · ' + g.waterTempF + '°F' : '') : '') + warn +
         '<br><a href="https://waterdata.usgs.gov/monitoring-location/' + g.code + '" target="_blank" rel="noopener">Live gauge ↗</a></div>').addTo(resultMap);
       pts.push([g.lat, g.lon]);
     }
@@ -2910,27 +2936,48 @@
       onAdd: function(){
         var b = L.DomUtil.create('button', 'ff-map-load');
         b.type = 'button';
-        b.textContent = '+ Load spots in this view';
+        b.textContent = '+ Load access & public land here';
         L.DomEvent.disableClickPropagation(b);
         L.DomEvent.on(b, 'click', function(){
           var bn = resultMap.getBounds();
           b.textContent = 'Loading…'; b.disabled = true;
           var box = bn.getSouth() + ',' + bn.getWest() + ',' + bn.getNorth() + ',' + bn.getEast();
-          var q = '[out:json][timeout:20];(nwr["leisure"="slipway"](' + box + ');nwr["leisure"="fishing"](' + box + '););out center tags 150;';
+          // launches & fishing access, plus KNOWN public land (parks, reserves,
+          // protected areas) — we only mark confirmed-public, never "private"
+          var q = '[out:json][timeout:25];(' +
+            'nwr["leisure"="slipway"](' + box + ');' +
+            'nwr["leisure"="fishing"](' + box + ');' +
+            'nwr["boundary"="protected_area"]["name"](' + box + ');' +
+            'nwr["leisure"="nature_reserve"]["name"](' + box + ');' +
+            'nwr["landuse"="recreation_ground"]["name"](' + box + ');' +
+            ');out center tags 200;';
           overpassFetch(q).then(function(data){
-            var added = 0;
+            var added = 0, land = 0;
             (data.elements || []).forEach(function(e){
               var elat = e.lat != null ? e.lat : (e.center && e.center.lat);
               var elon = e.lon != null ? e.lon : (e.center && e.center.lon);
               if(elat == null) return;
+              var t = e.tags || {};
+              var isLand = t.boundary === 'protected_area' || t.leisure === 'nature_reserve' || t.landuse === 'recreation_ground';
+              if(isLand){
+                if(t.access === 'private' || t.access === 'no') return; // never show as public if tagged otherwise
+                var lkey = 'L' + elat.toFixed(3) + ',' + elon.toFixed(3);
+                if(seen[lkey]) return; seen[lkey] = 1; land++;
+                L.circleMarker([elat, elon], {radius:6, color:'#3E6B4F', fillColor:'#4C6249', fillOpacity:0.65})
+                  .bindPopup('<div class="ff-map-popup"><strong>' + (t.name || 'Public land') + '</strong><br>Known public land — verify access & rules before fishing.' +
+                    '<br><a href="https://www.google.com/maps?q=' + elat + ',' + elon + '" target="_blank" rel="noopener">Directions ↗</a></div>').addTo(resultMap);
+                return;
+              }
               var key = elat.toFixed(4) + ',' + elon.toFixed(4);
               if(seen[key]) return; seen[key] = 1; added++;
-              var t = e.tags || {};
               var kind = t.leisure === 'slipway' ? 'Boat / canoe launch' : 'Fishing access';
               L.circleMarker([elat, elon], {radius:6, color:'#8C6A38', fillColor:'#B58A4A', fillOpacity:0.85})
                 .bindPopup(popupHtml(t.name || kind, kind, elat, elon)).addTo(resultMap);
             });
-            b.textContent = added ? '+' + added + ' spots — pan & tap again' : 'No more mapped here';
+            var msg = [];
+            if(added) msg.push('+' + added + ' access');
+            if(land) msg.push('+' + land + ' public land');
+            b.textContent = msg.length ? msg.join(', ') + ' — pan & tap again' : 'No more mapped here';
             b.disabled = false;
           }).catch(function(){ b.textContent = 'Try again'; b.disabled = false; });
         });
