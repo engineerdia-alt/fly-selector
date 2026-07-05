@@ -1638,11 +1638,18 @@
     if(!q){ status.textContent = auto ? '' : 'Type a name to search.'; return; }
     status.textContent = 'Searching...';
     var reqId = ++searchSeq;
-    Promise.all(queryVariants(q).map(function(v){
+    var fetches = queryVariants(q).map(function(v){
       return fetch('https://api.geoapify.com/v1/geocode/autocomplete?text=' + encodeURIComponent(v) + '&limit=6&format=json' + (ipBias ? '&bias=proximity:' + ipBias : '') + '&apiKey=' + GEOAPIFY_KEY)
         .then(function(r){ return r.json(); })
         .catch(function(){ return {}; });
-    })).then(function(datas){
+    });
+    // also search the angler's own state explicitly — this is what surfaces
+    // the Michigan "Rogue River" instead of only Oregon's for a MI user
+    if(ipState && q.toLowerCase().indexOf(ipState.toLowerCase()) === -1){
+      fetches.push(fetch('https://api.geoapify.com/v1/geocode/search?text=' + encodeURIComponent(q + ', ' + ipState) + '&limit=6&format=json' + (ipBias ? '&bias=proximity:' + ipBias : '') + '&apiKey=' + GEOAPIFY_KEY)
+        .then(function(r){ return r.json(); }).catch(function(){ return {}; }));
+    }
+    Promise.all(fetches).then(function(datas){
         if(reqId !== searchSeq) return;
         var lists = datas.map(function(d){ return d.results || []; });
         var merged = [], seen = {}, idx = 0, more = true;
