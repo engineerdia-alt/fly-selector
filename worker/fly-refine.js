@@ -161,21 +161,44 @@ export default {
     }
 
     // read collected feedback (owner only, via ?key=FEEDBACK_TOKEN — a
-    // separate password so the Anthropic key never rides in a URL)
-    if (request.method === 'GET' && url.pathname === '/feedback') {
+    // separate password so the Anthropic key never rides in a URL).
+    // /feedback -> JSON, /feedback/view -> a formatted HTML table
+    if (request.method === 'GET' && (url.pathname === '/feedback' || url.pathname === '/feedback/view')) {
       if (!env.FEEDBACK) return new Response('feedback store not configured', { status: 500, headers: cors });
       if (!env.FEEDBACK_TOKEN || url.searchParams.get('key') !== env.FEEDBACK_TOKEN) {
-        return new Response('unauthorized — set the FEEDBACK_TOKEN secret and use ?key=that', { status: 401, headers: cors });
+        return new Response('Unauthorized. Set the FEEDBACK_TOKEN secret (npx wrangler secret put FEEDBACK_TOKEN) and use ?key=that', { status: 401, headers: cors });
       }
-      const list = await env.FEEDBACK.list({ prefix: 'fb:', limit: 200 });
+      const list = await env.FEEDBACK.list({ prefix: 'fb:', limit: 1000 });
       const items = [];
       for (const k of list.keys) {
         const v = await env.FEEDBACK.get(k.name);
         if (v) items.push(JSON.parse(v));
       }
-      return new Response(JSON.stringify({ count: items.length, items }, null, 2), {
-        headers: { ...cors, 'Content-Type': 'application/json' }
-      });
+      items.sort((a, b) => (b.ts || '').localeCompare(a.ts || ''));
+
+      if (url.pathname === '/feedback') {
+        return new Response(JSON.stringify({ count: items.length, items }, null, 2), {
+          headers: { ...cors, 'Content-Type': 'application/json' }
+        });
+      }
+      const esc = (s) => String(s || '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+      const rows = items.map((it) => {
+        const when = it.ts ? new Date(it.ts).toLocaleString() : '';
+        return '<tr><td class="d">' + esc(when) + '</td><td class="s">' + esc(it.spot || '—') + '</td><td>' + esc(it.message) + '</td></tr>';
+      }).join('');
+      const html = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">' +
+        '<title>Fly Finder — Feedback</title><style>' +
+        'body{font-family:-apple-system,Segoe UI,Roboto,sans-serif;background:#F2ECDD;color:#141C18;margin:0;padding:24px;}' +
+        'h1{font-size:20px;margin:0 0 4px;}p.sub{color:#4B5750;margin:0 0 18px;font-size:13px;}' +
+        'table{width:100%;border-collapse:collapse;background:#fff;border-radius:10px;overflow:hidden;box-shadow:0 1px 4px rgba(0,0,0,.08);}' +
+        'th,td{text-align:left;padding:11px 13px;border-bottom:1px solid #E7DFC9;font-size:14px;vertical-align:top;}' +
+        'th{background:#0F322C;color:#F2ECDD;font-size:12px;letter-spacing:.04em;text-transform:uppercase;}' +
+        'td.d{white-space:nowrap;color:#4B5750;font-size:12px;}td.s{white-space:nowrap;color:#8C6A38;font-weight:600;}' +
+        'tr:last-child td{border-bottom:none;}.empty{padding:24px;color:#4B5750;}</style></head><body>' +
+        '<h1>Fly Finder — Feedback</h1><p class="sub">' + items.length + ' message' + (items.length === 1 ? '' : 's') + ' · newest first</p>' +
+        (items.length ? '<table><thead><tr><th>When</th><th>Spot</th><th>Message</th></tr></thead><tbody>' + rows + '</tbody></table>' : '<p class="empty">No feedback yet.</p>') +
+        '</body></html>';
+      return new Response(html, { headers: { ...cors, 'Content-Type': 'text/html; charset=utf-8' } });
     }
 
     if (request.method !== 'POST') return new Response('POST only', { status: 405, headers: cors });
