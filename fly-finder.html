@@ -3665,7 +3665,11 @@
       });
       exploreMap.addControl(new maplibregl.NavigationControl({showCompass: false}), 'bottom-right');
       exploreMap.on('error', function(e){ window.__ffMapErr = (e && e.error && e.error.message) || 'map error'; });
+      function kick(){ if(exploreMap){ exploreMap.resize(); exploreMap.triggerRepaint(); } }
       function addExploreMarkers(){
+        // the map is created while the overlay is still laying out; force a
+        // resize + repaint so the GL canvas actually paints instead of staying blank
+        kick();
         if(destMarkers.length) return;
         WATER_NOTES.forEach(function(n){
           var el = document.createElement('div'); el.className = 'ff-dest-dot';
@@ -3680,6 +3684,13 @@
       // and don't hang forever if a slow tile source delays 'load'
       exploreMap.on('load', addExploreMarkers);
       setTimeout(addExploreMarkers, 2500);
+      // MapLibre can paint blank when created in a just-opened flex container;
+      // keep nudging a resize+repaint until the vector tiles have painted
+      // (also on 'idle', which fires once tiles finish loading)
+      exploreMap.on('idle', kick);
+      exploreMap.on('sourcedata', kick);
+      var kicks = 0;
+      var kickInt = setInterval(function(){ kick(); if(++kicks > 30 || !exploreMap) clearInterval(kickInt); }, 500);
       exploreMap.on('moveend', exploreFetch);
     }, 60);
   }
