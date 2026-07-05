@@ -803,45 +803,73 @@
   <div class="ff-hero" id="hero" aria-hidden="true">
     <svg viewBox="0 0 800 180" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <linearGradient id="troutG" x1="0" y1="0" x2="1" y2="1">
-          <stop offset="0" stop-color="var(--river-light)"/>
-          <stop offset="0.55" stop-color="var(--moss)"/>
-          <stop offset="1" stop-color="#D3CFB2"/>
+        <linearGradient id="troutG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#28402F"/>
+          <stop offset="0.34" stop-color="#4C6249"/>
+          <stop offset="0.6" stop-color="#8A9068"/>
+          <stop offset="0.82" stop-color="#CFC9A6"/>
+          <stop offset="1" stop-color="#EFE9CF"/>
         </linearGradient>
+        <linearGradient id="skyG" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#F6EFD6"/>
+          <stop offset="1" stop-color="#EBE2C6"/>
+        </linearGradient>
+        <radialGradient id="sunG" cx="0.5" cy="0.5" r="0.5">
+          <stop offset="0" stop-color="#D9B978"/>
+          <stop offset="1" stop-color="#C6A159"/>
+        </radialGradient>
       </defs>
-      <rect width="800" height="180" fill="var(--parchment-dim)"/>
-      <circle cx="672" cy="46" r="26" fill="var(--brass)" opacity="0.85"/>
-      <path d="M0 116 q170 -26 350 -6 q190 22 450 -10 V180 H0 Z" fill="var(--river-light)" opacity="0.7"/>
-      <path d="M0 146 q200 -20 420 -4 q200 14 380 -8 V180 H0 Z" fill="var(--river)"/>
-      <path d="M120 162 q200 -26 380 -10 q120 12 300 -2" fill="none" stroke="var(--parchment)" stroke-width="2" opacity="0.3"/>
-      <!-- splash where the trout broke the surface -->
-      <g fill="var(--parchment)" opacity="0.65">
-        <path d="M282 128 q-12 -24 -2 -38 q6 16 11 22 q6 -11 13 -15 q-2 18 -7 31z" opacity="0.5"/>
-        <circle cx="288" cy="120" r="4"/><circle cx="272" cy="107" r="3"/><circle cx="303" cy="103" r="2.6"/><circle cx="262" cy="121" r="2.2"/><circle cx="248" cy="112" r="1.8"/>
+      <rect width="800" height="180" fill="url(#skyG)"/>
+      <circle cx="678" cy="44" r="27" fill="url(#sunG)" opacity="0.9"/>
+      <!-- layered water -->
+      <path d="M0 118 q170 -24 350 -6 q190 20 450 -10 V180 H0 Z" fill="var(--river-light)" opacity="0.55"/>
+      <path d="M0 140 q160 -22 340 -6 q210 20 460 -8 V180 H0 Z" fill="var(--river-light)" opacity="0.85"/>
+      <path d="M0 156 q200 -18 420 -4 q200 12 380 -8 V180 H0 Z" fill="var(--river)"/>
+      <path d="M120 150 q180 -22 360 -8 q120 10 300 -2" fill="none" stroke="var(--parchment)" stroke-width="2" opacity="0.28"/>
+      <!-- leader + tied fly the trout is rising to -->
+      <path d="M800 4 Q 560 16 500 40" fill="none" stroke="var(--river)" stroke-width="1.3" opacity="0.6"/>
+      <g transform="translate(500,40)">
+        <path d="M2 1 q17 -5 31 2 q-9 5 -19 8 q-7 -6 -14 -10z" fill="var(--rust)"/>
+        <path d="M2 4 q-6 9 2 16 q6 -5 3 -12" fill="none" stroke="var(--brass)" stroke-width="1.6"/>
+        <circle cx="0" cy="0" r="4" fill="#3a3a3a"/><circle cx="-1" cy="-1" r="1.3" fill="var(--parchment)" opacity="0.7"/>
       </g>
-      <!-- leader from the rod, down to the fly -->
-      <path d="M800 6 Q 570 18 492 42" fill="none" stroke="var(--river)" stroke-width="1.4" opacity="0.65"/>
-      <!-- the tied fly the trout is rising to -->
-      <g transform="translate(492,42)">
-        <circle cx="0" cy="0" r="4" fill="var(--brass)"/>
-        <path d="M1 0 q16 -4 30 2 q-9 4 -18 7 q-7 -6 -13 -9z" fill="var(--rust)"/>
-        <path d="M1 3 q-5 8 2 14 q5 -4 3 -10" fill="none" stroke="var(--brass)" stroke-width="1.6"/>
+      <!-- splash crown + flying spray where the trout broke the surface -->
+      <g fill="var(--parchment)">
+        <path d="M250 132 q-6 -30 4 -44 q3 18 8 25 q4 -14 12 -20 q0 12 -2 22 q7 -9 15 -11 q-4 14 -12 24 q10 -4 19 -3 q-13 9 -28 12 z" opacity="0.55"/>
+        <g opacity="0.8"><circle cx="238" cy="112" r="3.4"/><circle cx="224" cy="98" r="2.6"/><circle cx="255" cy="92" r="2.4"/><circle cx="211" cy="110" r="2"/><circle cx="270" cy="104" r="2.1"/><circle cx="245" cy="80" r="1.7"/><circle cx="285" cy="118" r="2.6"/><circle cx="300" cy="132" r="2"/></g>
       </g>
-      <!-- the leaping trout -->
-      <g>
-        <path d="M300,122 L276,105 L285,122 L276,141 Z" fill="var(--moss)"/>
-        <path d="M300,124 C 332,66 394,49 438,56 C 410,95 361,121 300,124 Z" fill="url(#troutG)" stroke="var(--river)" stroke-width="1"/>
-        <path d="M312,116 C 346,83 390,65 430,61" fill="none" stroke="var(--rust)" stroke-width="3" opacity="0.5" stroke-linecap="round"/>
-        <path d="M356,73 q10 -14 25 -14 q-6 11 -11 21z" fill="var(--moss)"/>
-        <path d="M322,95 q6 -6 13 -5 q-4 6 -6 10z" fill="var(--moss)"/>
-        <path d="M400,95 q4 12 -4 20 q-8 -6 -8 -16z" fill="var(--river-light)"/>
-        <g fill="var(--river)" opacity="0.55">
-          <circle cx="362" cy="79" r="2"/><circle cx="382" cy="75" r="1.8"/><circle cx="402" cy="73" r="1.6"/><circle cx="345" cy="92" r="1.8"/><circle cx="374" cy="90" r="1.6"/><circle cx="398" cy="85" r="1.5"/>
+      <!-- the leaping rainbow trout -->
+      <g transform="translate(300,96) rotate(-24)">
+        <!-- caudal (tail) fin, forked -->
+        <path d="M-88 0 C -104 -18 -116 -24 -120 -22 C -110 -14 -108 -6 -108 0 C -108 6 -110 14 -120 22 C -116 24 -104 18 -88 0 Z" fill="#3C5140"/>
+        <!-- body -->
+        <path d="M-92 0 C -60 -30 20 -40 92 -18 C 104 -12 108 -4 104 2 C 96 12 60 22 4 26 C -40 28 -74 20 -92 8 C -96 5 -96 3 -92 0 Z" fill="url(#troutG)" stroke="#26382B" stroke-width="1.2"/>
+        <!-- pink rainbow lateral stripe -->
+        <path d="M-80 2 C -44 -14 24 -22 96 -12" fill="none" stroke="#B26A5A" stroke-width="6" opacity="0.55" stroke-linecap="round"/>
+        <path d="M-80 6 C -44 -8 24 -16 98 -8" fill="none" stroke="#2C4030" stroke-width="1.2" opacity="0.5"/>
+        <!-- dorsal fin -->
+        <path d="M-24 -30 C -10 -52 22 -52 34 -30 C 22 -38 -6 -40 -24 -30 Z" fill="#3C5140"/>
+        <!-- adipose fin (trout signature) -->
+        <path d="M-58 -20 C -50 -30 -40 -30 -36 -22 C -44 -24 -52 -22 -58 -20 Z" fill="#40563F"/>
+        <!-- pectoral fin -->
+        <path d="M52 14 C 66 30 62 44 46 42 C 44 32 44 22 52 14 Z" fill="#556A4C" opacity="0.95"/>
+        <!-- pelvic + anal fins -->
+        <path d="M-6 24 C 2 38 -2 44 -12 40 C -12 32 -10 27 -6 24 Z" fill="#4C6249"/>
+        <path d="M-46 20 C -40 32 -46 36 -54 32 C -52 26 -50 22 -46 20 Z" fill="#4C6249"/>
+        <!-- spots on the upper body, dorsal and tail -->
+        <g fill="#26382B" opacity="0.6">
+          <circle cx="-40" cy="-14" r="2.3"/><circle cx="-18" cy="-20" r="2.5"/><circle cx="6" cy="-22" r="2.2"/><circle cx="30" cy="-20" r="2"/><circle cx="52" cy="-16" r="1.9"/><circle cx="72" cy="-12" r="1.7"/>
+          <circle cx="-28" cy="-4" r="2"/><circle cx="-2" cy="-8" r="1.9"/><circle cx="22" cy="-8" r="1.8"/><circle cx="46" cy="-4" r="1.6"/><circle cx="-100" cy="-8" r="1.6"/><circle cx="-104" cy="6" r="1.5"/>
         </g>
-        <path d="M420,65 q-6 8 -3 18" fill="none" stroke="var(--river)" stroke-width="1.2" opacity="0.55"/>
-        <circle cx="426" cy="65" r="3.4" fill="var(--parchment)"/>
-        <circle cx="427" cy="65" r="1.7" fill="var(--ink)"/>
-        <path d="M438,56 q8 -1 12 3" fill="none" stroke="var(--river)" stroke-width="1.4"/>
+        <!-- gill plate -->
+        <path d="M74 -12 C 66 0 68 14 78 24" fill="none" stroke="#26382B" stroke-width="1.4" opacity="0.6"/>
+        <!-- eye -->
+        <circle cx="88" cy="-8" r="5.2" fill="#EFE9CF"/>
+        <circle cx="89" cy="-8" r="2.8" fill="#1C231F"/>
+        <circle cx="90.5" cy="-9.5" r="1" fill="#fff" opacity="0.8"/>
+        <!-- open jaw reaching for the fly -->
+        <path d="M104 2 C 112 0 118 -2 122 -8" fill="none" stroke="#26382B" stroke-width="1.6" stroke-linecap="round"/>
+        <path d="M104 6 C 110 8 116 8 120 6" fill="none" stroke="#26382B" stroke-width="1.4" stroke-linecap="round"/>
       </g>
     </svg>
   </div>
