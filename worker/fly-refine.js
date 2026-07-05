@@ -54,6 +54,8 @@ const GUIDE_SYSTEM =
   '(3) WHERE — name specific access points FROM the provided nearbyAccessPoints list and what each stretch offers; ' +
   '(4) what NOT to do — safety (high/muddy water) and likely regulations (trout streams often restrict bait/gear — tell them to verify with the state agency); ' +
   '(5) a backup plan if the water is blown out. ' +
+  'The nearbyAccessPoints in the context are shown as pins on a map directly above this chat, so refer to them by name ' +
+  '("on the map above, try...") when the angler asks where to fish. ' +
   'Only use access-point names that appear in the context; never invent specific place names, ratings, or gauge numbers. ' +
   'If a fact is not in the context, reason from general knowledge and say it is general. Be honest, practical, concise. ' +
   'Format for a phone card: short paragraphs, "-" bullets for tactics/spots/steps, **bold** for the verdict and key numbers. ' +
@@ -159,9 +161,11 @@ export default {
         return new Response('missing question', { status: 400, headers: cors });
       }
       const ctx = JSON.stringify(body.context || {}).slice(0, 3000);
-      // context rides in the first user turn so the system block stays
-      // identical across spots and stays cache-friendly
-      msgs[0] = { role: msgs[0].role, content: 'Conditions context: ' + ctx + '\n\n' + msgs[0].content };
+      // attach fresh context to the CURRENT question (last user turn) so the
+      // model always has the conditions and access points right next to what
+      // it's answering — on follow-ups it was losing data buried turns back
+      const li = msgs.length - 1;
+      msgs[li] = { role: msgs[li].role, content: 'Current conditions & nearby access points (JSON): ' + ctx + '\n\nAngler asks: ' + msgs[li].content };
       const ar = await callAnthropic(env, { system: GUIDE_SYSTEM, messages: msgs, maxTokens: 700 });
       if (!ar.ok) {
         return new Response(JSON.stringify({ error: 'anthropic ' + ar.status }), {
