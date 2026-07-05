@@ -17,6 +17,8 @@ const MODEL = 'claude-haiku-4-5-20251001';
 const REFINE_SYSTEM =
   'You are a fly fishing expert with detailed knowledge of North American fisheries. ' +
   'The user gives you an exact spot (name, coordinates, state, water type) and a list of candidate species keys. ' +
+  'If an "onWater" field is present, the spot (often a park or access point) sits ON that named water — identify the ' +
+  'fishery by that water, not by guessing a different river from the coordinates. ' +
   'Think about that SPECIFIC section — dams, temperature regime, gradient — not the river in general. ' +
   'Reply with STRICT JSON only, no prose before or after: ' +
   '{"species": [subset of the candidate keys that realistically occur and are worth targeting in this exact section], ' +
@@ -44,6 +46,8 @@ const GUIDE_SYSTEM =
   'You are a sharp, local fly fishing guide who knows North American waters intimately. An angler is asking about a ' +
   'specific outing, and you are given a JSON conditions context (spot, coordinates, recent rainfall over the last days, ' +
   'water temp, flow and its trend, wind, sky, moon, tide, the actual named access points nearby, and any local knowledge). ' +
+  'If an "onWater" field is present, the spot sits ON that named water — treat the outing as fishing that water, not a ' +
+  'different river guessed from coordinates. ' +
   'Reason like a local who just checked the gauge and the sky — connect the dots between the facts. ' +
   'Especially: recent rain raises and dirties flow (fish go deep, eat big/dark/high-visibility flies, hold in slack water ' +
   'behind structure; but a blown-out creek is unsafe and unfishable); a dropping, clearing gauge means spooky fish and ' +
@@ -184,14 +188,14 @@ export default {
       });
     }
 
-    const { name, state, lat, lon, water, candidates } = body || {};
+    const { name, state, lat, lon, water, candidates, onWater } = body || {};
     if (!name || typeof lat !== 'number' || typeof lon !== 'number') {
       return new Response('missing fields', { status: 400, headers: cors });
     }
 
     const cache = caches.default;
-    const cacheKey = new Request('https://cache.fly-finder.internal/v2/' + encodeURIComponent(
-      [name, state || '', Math.round(lat * 20) / 20, Math.round(lon * 20) / 20, water || ''].join('|')
+    const cacheKey = new Request('https://cache.fly-finder.internal/v3/' + encodeURIComponent(
+      [name, state || '', Math.round(lat * 20) / 20, Math.round(lon * 20) / 20, water || '', onWater || ''].join('|')
     ));
     const hit = await cache.match(cacheKey);
     if (hit) {
@@ -202,7 +206,8 @@ export default {
 
     const userMsg =
       'Spot: "' + name + '" at ' + lat.toFixed(4) + ',' + lon.toFixed(4) +
-      (state ? ' in ' + state : '') + (water ? ' (' + water + ' water)' : '') + '. ' +
+      (state ? ' in ' + state : '') + (water ? ' (' + water + ' water)' : '') +
+      (onWater ? ' — this spot is ON ' + onWater + '; identify the fishery as ' + onWater : '') + '. ' +
       'Candidate species keys: ' + (candidates || []).join(', ') + '.';
 
     const r = await callAnthropic(env, { system: REFINE_SYSTEM, messages: [{ role: 'user', content: userMsg }], maxTokens: 400 });

@@ -1925,6 +1925,7 @@
     var loc = state.location;
     var payload = JSON.stringify({
       name: loc.name, state: loc.state, lat: loc.lat, lon: loc.lon,
+      onWater: loc.waterHint || null,
       water: water, candidates: speciesByWater[water] || []
     });
     function attempt(idx){
@@ -2454,6 +2455,7 @@
     var rw = state.recentWeather;
     var ctx = {
       spot: loc.name,
+      onWater: loc.waterHint || null,
       region: loc.region,
       state: loc.state,
       coords: loc.lat != null ? (loc.lat.toFixed(3) + ',' + loc.lon.toFixed(3)) : null,
@@ -2879,6 +2881,53 @@
       '<p class="ff-spark-cap">Last 7 days · range ' + Math.round(min) + '–' + Math.round(max) + ' cfs</p>';
   }
 
+  // tap a spot on the map to make it the new subject — regenerate flies,
+  // fish, weather, gauge, AI read and everything else for that exact place,
+  // like a fresh conversation anchored there
+  function reanchor(spot){
+    var prev = state.location || {};
+    // a tapped access point / park usually sits ON the water we were already
+    // looking at — carry that river name so the AI doesn't misidentify the spot
+    var waterHint = detectWaterType(spot.name) ? spot.name
+      : (detectWaterType(prev.name || '') ? prev.name : (prev.waterHint || null));
+    state.location = {
+      name: spot.name,
+      region: spot.region || prev.region || '',
+      state: spot.state || prev.state || null,
+      lat: spot.lat, lon: spot.lon,
+      country: spot.country || prev.country || null,
+      waterHint: waterHint
+    };
+    state.notes = findWaterNotes(waterHint || state.location.name, state.location.state);
+    state.gauge = null; state.access = null; state.tide = null;
+    state.aiRefine = null; state.recentWeather = null; state.bestWindow = null;
+    state.askChat = [];
+    renderResult();
+    goToStep(5);
+    var box = document.getElementById('resultBox');
+    if(box && box.scrollIntoView) box.scrollIntoView({behavior:'smooth', block:'start'});
+    fetchWeather(spot.lat, spot.lon, document.getElementById('locateStatus')).then(refreshResult).catch(function(){});
+    fetchGauge(spot.lat, spot.lon);
+    fetchAccess(spot.lat, spot.lon);
+    if(state.water === 'ocean') fetchTides(spot.lat, spot.lon);
+    refineLocation(state.water);
+  }
+
+  // popup with Directions + a "Fish here" button that re-anchors the page
+  function spotPopup(title, sub, spot){
+    var div = document.createElement('div');
+    div.className = 'ff-map-popup';
+    div.innerHTML = '<strong>' + title + '</strong>' + (sub ? '<br>' + sub : '') +
+      '<br><a href="https://www.google.com/maps?q=' + spot.lat + ',' + spot.lon + '" target="_blank" rel="noopener">Directions ↗</a><br>';
+    var b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'ff-popup-btn';
+    b.textContent = 'Fish here →';
+    b.addEventListener('click', function(){ reanchor(spot); });
+    div.appendChild(b);
+    return div;
+  }
+
   function renderMap(){
     var el = document.getElementById('resultMap');
     if(!el || !window.L || !state.location) return;
@@ -2905,7 +2954,7 @@
 
     (state.access || []).forEach(function(a){
       var m = L.circleMarker([a.lat, a.lon], {radius:7, color:'#8C6A38', fillColor:'#B58A4A', fillOpacity:0.9});
-      m.bindPopup(popupHtml(a.name || a.kind, a.kind + ' · ' + a.dist.toFixed(1) + ' mi', a.lat, a.lon)).addTo(resultMap);
+      m.bindPopup(spotPopup(a.name || a.kind, a.kind + ' · ' + a.dist.toFixed(1) + ' mi', {name: a.name || a.kind, lat: a.lat, lon: a.lon})).addTo(resultMap);
       pts.push([a.lat, a.lon]);
     });
 
@@ -2964,15 +3013,14 @@
                 var lkey = 'L' + elat.toFixed(3) + ',' + elon.toFixed(3);
                 if(seen[lkey]) return; seen[lkey] = 1; land++;
                 L.circleMarker([elat, elon], {radius:6, color:'#3E6B4F', fillColor:'#4C6249', fillOpacity:0.65})
-                  .bindPopup('<div class="ff-map-popup"><strong>' + (t.name || 'Public land') + '</strong><br>Known public land — verify access & rules before fishing.' +
-                    '<br><a href="https://www.google.com/maps?q=' + elat + ',' + elon + '" target="_blank" rel="noopener">Directions ↗</a></div>').addTo(resultMap);
+                  .bindPopup(spotPopup(t.name || 'Public land', 'Known public land — verify access & rules.', {name: t.name || 'Public land', lat: elat, lon: elon})).addTo(resultMap);
                 return;
               }
               var key = elat.toFixed(4) + ',' + elon.toFixed(4);
               if(seen[key]) return; seen[key] = 1; added++;
               var kind = t.leisure === 'slipway' ? 'Boat / canoe launch' : 'Fishing access';
               L.circleMarker([elat, elon], {radius:6, color:'#8C6A38', fillColor:'#B58A4A', fillOpacity:0.85})
-                .bindPopup(popupHtml(t.name || kind, kind, elat, elon)).addTo(resultMap);
+                .bindPopup(spotPopup(t.name || kind, kind, {name: t.name || kind, lat: elat, lon: elon})).addTo(resultMap);
             });
             var msg = [];
             if(added) msg.push('+' + added + ' access');
