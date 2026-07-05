@@ -1666,6 +1666,37 @@
 
   // "ausable" won't exact-match OSM's "Au Sable"; also try the split/joined
   // spellings of compound place-name prefixes and merge the result sets
+  // Photon is OSM-based and has far better river/stream coverage than
+  // Geoapify (which returns streets named after rivers). Map its GeoJSON
+  // features into the same shape the rest of the search code expects.
+  function photonType(v){
+    v = v || '';
+    if(/^(river|stream|canal|drain|ditch|lake|reservoir|pond|water|bay|wetland|riverbank|spring|waterfall|weir|dam|strait|lagoon|cove)$/.test(v)) return 'water';
+    if(/^(city|town|village|hamlet|municipality)$/.test(v)) return 'city';
+    if(/^(suburb|neighbourhood|county|state|region)$/.test(v)) return 'suburb';
+    if(/^(cycleway|footway|path|track|residential|service|primary|secondary|tertiary|trunk|motorway|street|road|pedestrian|living_street|unclassified|construction)$/.test(v)) return 'street';
+    if(/^(house|apartments|building|yes|garage)$/.test(v)) return 'building';
+    return 'amenity';
+  }
+  function photonSearch(q){
+    var parts = ipBias ? ipBias.split(',') : null;
+    var url = 'https://photon.komoot.io/api/?q=' + encodeURIComponent(q) + '&limit=8' +
+      (parts ? '&lat=' + parts[1] + '&lon=' + parts[0] : '');
+    return fetch(url).then(function(r){ return r.json(); }).then(function(d){
+      var results = (d.features || []).map(function(f){
+        var c = (f.geometry && f.geometry.coordinates) || [];
+        var p = f.properties || {};
+        return {
+          name: p.name, lat: c[1], lon: c[0],
+          state: p.state, county: p.county, city: p.city, country: p.country,
+          result_type: photonType(p.osm_value),
+          place_id: 'photon:' + (p.osm_type || '') + p.osm_id
+        };
+      }).filter(function(r){ return r.name && r.lat != null; });
+      return {results: results};
+    }).catch(function(){ return {}; });
+  }
+
   function queryVariants(q){
     var prefixes = ['au', 'la', 'el', 'mc', 'san', 'de'];
     var variants = [q];
@@ -1713,6 +1744,8 @@
       fetches.push(fetch('https://api.geoapify.com/v1/geocode/search?text=' + encodeURIComponent(q + ', ' + ipState) + '&limit=6&format=json' + (ipBias ? '&bias=proximity:' + ipBias : '') + '&apiKey=' + GEOAPIFY_KEY)
         .then(function(r){ return r.json(); }).catch(function(){ return {}; }));
     }
+    // Photon (OSM) has the real rivers Geoapify misses — make it a source
+    fetches.push(photonSearch(q));
     Promise.all(fetches).then(function(datas){
         if(reqId !== searchSeq) return;
         var lists = datas.map(function(d){ return d.results || []; });
@@ -1830,7 +1863,9 @@
         return;
       }
       if(dropTypes[r.result_type]) return;
-      if(waterNameRe.test(nm)) out.waters.push(r);
+      // Photon tags genuine water features as 'water' — trust that even if the
+      // name has no water word; otherwise fall back to the name test
+      if(r.result_type === 'water' || waterNameRe.test(nm)) out.waters.push(r);
     });
     if(query){
       out.waters.sort(function(a, b){ return waterScore(b, query) - waterScore(a, query); });
