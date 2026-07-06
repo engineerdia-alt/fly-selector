@@ -38,7 +38,7 @@ const PLAN_SYSTEM =
   'Reply with STRICT JSON only, no prose outside it: ' +
   '{"reply": "one or two friendly sentences to the angler", ' +
   '"ready": true only once you have a usable place (a named water OR a town/city), else false, ' +
-  '"place": "the most specific water or town named, exactly as an app map search would want it, or null", ' +
+  '"place": "the most specific water or town named. If the angler names a STATE (or it is obvious), you MUST include it, e.g. \\"Huron River, Ohio\\" — never drop the state, it disambiguates same-named rivers across states. null if no place given", ' +
   '"species": one valid species key if clearly implied else null, ' +
   '"method": one valid method if stated else null, ' +
   '"water": one valid water type if clear from the place or words else null}. ' +

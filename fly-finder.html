@@ -1870,6 +1870,20 @@
     'Arizona':'southwest','New Mexico':'southwest','Texas':'southwest','Oklahoma':'southwest','Nevada':'southwest',
     'California':'west','Oregon':'west','Washington':'west','Alaska':'west','Hawaii':'west'
   };
+  var STATE_NAMES = Object.keys(stateRegion);
+  var STATE_ABBR = {AL:'Alabama',AK:'Alaska',AZ:'Arizona',AR:'Arkansas',CA:'California',CO:'Colorado',CT:'Connecticut',DE:'Delaware',FL:'Florida',GA:'Georgia',ID:'Idaho',IL:'Illinois',IN:'Indiana',IA:'Iowa',KS:'Kansas',KY:'Kentucky',LA:'Louisiana',ME:'Maine',MD:'Maryland',MA:'Massachusetts',MI:'Michigan',MN:'Minnesota',MS:'Mississippi',MO:'Missouri',MT:'Montana',NE:'Nebraska',NV:'Nevada',NH:'New Hampshire',NJ:'New Jersey',NM:'New Mexico',NY:'New York',NC:'North Carolina',ND:'North Dakota',OH:'Ohio',OK:'Oklahoma',OR:'Oregon',PA:'Pennsylvania',RI:'Rhode Island',SC:'South Carolina',SD:'South Dakota',TN:'Tennessee',TX:'Texas',UT:'Utah',VT:'Vermont',VA:'Virginia',WA:'Washington',WV:'West Virginia',WI:'Wisconsin',WY:'Wyoming'};
+  // did the angler explicitly name a US state in their query? that overrides
+  // the home-state (ipState) bias entirely
+  function queryState(q){
+    if(!q) return null;
+    var s = ' ' + q.toLowerCase() + ' ';
+    for(var i = 0; i < STATE_NAMES.length; i++){
+      if(s.indexOf(' ' + STATE_NAMES[i].toLowerCase() + ' ') !== -1 || s.indexOf(', ' + STATE_NAMES[i].toLowerCase()) !== -1) return STATE_NAMES[i];
+    }
+    var m = q.match(/\b([A-Z]{2})\b/);
+    if(m && STATE_ABBR[m[1]]) return STATE_ABBR[m[1]];
+    return null;
+  }
 
   // month-keyed major hatches per region; shown for trout/steelhead water
   var HATCHES = {
@@ -2035,10 +2049,12 @@
         .then(function(r){ return r.json(); })
         .catch(function(){ return {}; });
     });
-    // also search the angler's own state explicitly — this is what surfaces
-    // the Michigan "Rogue River" instead of only Oregon's for a MI user
-    if(ipState && q.toLowerCase().indexOf(ipState.toLowerCase()) === -1){
-      fetches.push(fetch('https://api.geoapify.com/v1/geocode/search?text=' + encodeURIComponent(q + ', ' + ipState) + '&limit=6&format=json' + (ipBias ? '&bias=proximity:' + ipBias : '') + '&apiKey=' + GEOAPIFY_KEY)
+    // add an explicit state-qualified search: the state the angler NAMED wins;
+    // only fall back to their home state when they didn't name one
+    var qSt = queryState(q);
+    var searchState = qSt || (ipState && q.toLowerCase().indexOf(ipState.toLowerCase()) === -1 ? ipState : null);
+    if(searchState && q.toLowerCase().indexOf(searchState.toLowerCase()) === -1){
+      fetches.push(fetch('https://api.geoapify.com/v1/geocode/search?text=' + encodeURIComponent(q + ', ' + searchState) + '&limit=6&format=json&apiKey=' + GEOAPIFY_KEY)
         .then(function(r){ return r.json(); }).catch(function(){ return {}; }));
     }
     // Photon (OSM) has the real rivers Geoapify misses — make it a source
@@ -2133,7 +2149,11 @@
   // ("Huron River" over "Huron River Hills" or "Huron River Drive")
   function waterScore(r, q){
     var name = (r.name || r.address_line1 || r.formatted || '').toLowerCase().trim();
+    var qState = queryState(q);
+    // for name matching, strip the state the user named so "Huron River Ohio"
+    // still matches the name "Huron River"
     var query = (q || '').toLowerCase().split(',')[0].trim();
+    if(qState) query = query.replace(new RegExp('\\b' + qState.toLowerCase() + '\\b', 'g'), '').replace(/\s+/g, ' ').trim();
     var score = 0;
     if(name === query) score += 100;
     else if(query && (name.indexOf(query) === 0 || query.indexOf(name) === 0)) score += 30;
@@ -2143,9 +2163,15 @@
     if(/\b(hills?|heights|estates?|village|manor|acres|watershed|subdivision|crossing|drive|road|court|lane|street|avenue|boulevard|circle|apartments?|school)\b/i.test(name)) score -= 40;
     var extra = name.split(/\s+/).length - (query ? query.split(/\s+/).length : 1);
     if(extra > 0) score -= extra * 4;
-    // local-first: surface waters in the angler's own state (a Michigan user
-    // searching "Rogue River" should see the Michigan one, not Oregon's)
-    if(ipState && r.state === ipState) score += 28;
+    // an explicitly-named state WINS: strongly prefer it, and penalize the
+    // wrong state — the user said Ohio, don't hand them Michigan
+    if(qState){
+      if(r.state === qState) score += 80;
+      else if(r.state) score -= 70;
+    } else if(ipState && r.state === ipState){
+      // otherwise, gentle home-state preference (Rogue River -> Michigan's)
+      score += 28;
+    }
     return score;
   }
 
@@ -2236,18 +2262,29 @@
   // both endpoints and let waterScore pick the true feature.
   function geocodeWater(place){
     var waterName = (place || '').split(',')[0].trim();
+    var qSt = queryState(place);
+    // keep the named state on the water-name queries so the right state's
+    // river surfaces (Huron River Ohio must not become Michigan's)
+    var stateSuffix = qSt ? ', ' + qSt : '';
     var calls = [];
     queryVariants(waterName).forEach(function(v){
-      calls.push('https://api.geoapify.com/v1/geocode/autocomplete?text=' + encodeURIComponent(v) + '&limit=6&format=json' + (ipBias ? '&bias=proximity:' + ipBias : '') + '&apiKey=' + GEOAPIFY_KEY);
+      calls.push('https://api.geoapify.com/v1/geocode/autocomplete?text=' + encodeURIComponent(v + stateSuffix) + '&limit=6&format=json' + (ipBias ? '&bias=proximity:' + ipBias : '') + '&apiKey=' + GEOAPIFY_KEY);
     });
-    // full-text search surfaces clean natural features; run it on the water
-    // name and (for cross-state disambiguation) the full place string
-    calls.push('https://api.geoapify.com/v1/geocode/search?text=' + encodeURIComponent(waterName) + '&limit=6&format=json' + (ipBias ? '&bias=proximity:' + ipBias : '') + '&apiKey=' + GEOAPIFY_KEY);
+    calls.push('https://api.geoapify.com/v1/geocode/search?text=' + encodeURIComponent(waterName + stateSuffix) + '&limit=6&format=json' + (ipBias ? '&bias=proximity:' + ipBias : '') + '&apiKey=' + GEOAPIFY_KEY);
+    calls.push('https://photon.komoot.io/api/?q=' + encodeURIComponent(waterName + (qSt ? ' ' + qSt : '')) + '&limit=8' + (ipBias ? '&lat=' + ipBias.split(',')[1] + '&lon=' + ipBias.split(',')[0] : ''));
     if(place && place !== waterName){
       calls.push('https://api.geoapify.com/v1/geocode/search?text=' + encodeURIComponent(place) + '&limit=6&format=json' + (ipBias ? '&bias=proximity:' + ipBias : '') + '&apiKey=' + GEOAPIFY_KEY);
     }
     return Promise.all(calls.map(function(u){
-      return fetch(u).then(function(r){ return r.json(); }).catch(function(){ return {}; });
+      var isPhoton = u.indexOf('photon') !== -1;
+      return fetch(u).then(function(r){ return r.json(); }).then(function(d){
+        if(!isPhoton) return d;
+        return {results: (d.features || []).map(function(f){
+          var c = (f.geometry && f.geometry.coordinates) || [];
+          var p = f.properties || {};
+          return {name:p.name, lat:c[1], lon:c[0], state:p.state, county:p.county, city:p.city, country:p.country, result_type:photonType(p.osm_value), place_id:'photon:' + (p.osm_type||'') + p.osm_id};
+        }).filter(function(x){ return x.name && x.lat != null; })};
+      }).catch(function(){ return {}; });
     })).then(function(datas){
       var merged = [], seen = {};
       datas.forEach(function(d){
@@ -2256,7 +2293,8 @@
           if(!seen[k]){ seen[k] = 1; merged.push(c); }
         });
       });
-      var sp = splitWaters(merged, waterName);
+      // score against the FULL place so the named state is honored
+      var sp = splitWaters(merged, place || waterName);
       if(sp.waters.length) return {type:'water', r:sp.waters[0]};
       if(sp.city) return {type:'city', r:sp.city};
       return null;
