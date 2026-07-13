@@ -3891,9 +3891,19 @@
     return div;
   }
 
-  function renderMap(){
+  function renderMap(retryCount){
     var el = document.getElementById('resultMap');
     if(!el || !window.L || !state.location) return;
+    // the results step's container can still report zero size for a frame or two
+    // right after it becomes visible (layout hasn't settled yet) — Leaflet throws
+    // internal geometry errors if initialized against a zero-size element, so wait
+    // for real dimensions before proceeding, retrying briefly instead of guessing a fixed delay
+    if((el.offsetWidth === 0 || el.offsetHeight === 0)){
+      retryCount = (retryCount || 0) + 1;
+      if(retryCount > 20) return; // ~1s of retries — give up quietly rather than throw
+      setTimeout(function(){ renderMap(retryCount); }, 50);
+      return;
+    }
     if(resultMap){
       resultMap.remove();
       resultMap = null;
@@ -4054,6 +4064,10 @@
       }
     });
     resultMap.addControl(new LoadCtl());
+
+    // safety net: fonts/layout can still shift the container size slightly
+    // right after init on some devices — re-measure once things settle
+    setTimeout(function(){ if(resultMap) resultMap.invalidateSize(); }, 300);
   }
 
   // ---- full-screen explore map ----
