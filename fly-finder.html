@@ -91,6 +91,49 @@
     color:var(--river);
     margin:0 0 18px;
   }
+  /* the active step's question reads as an incoming chat message from the guide */
+  .ff-step:not([data-step="0"]) .ff-q{
+    display:inline-block;
+    background:var(--surface);
+    border:1px solid var(--parchment-dim);
+    border-radius:16px 16px 16px 4px;
+    padding:12px 16px;
+    box-shadow:var(--card-shadow);
+    max-width:88%;
+  }
+  .ff-transcript{
+    display:none;
+    flex-direction:column;
+    gap:8px;
+    margin-bottom:18px;
+    max-height:320px;
+    overflow-y:auto;
+    padding-right:2px;
+  }
+  .ff-transcript:empty{display:none;}
+  .ff-chat-row{display:flex;}
+  .ff-chat-row.ff-chat-bot{justify-content:flex-start;}
+  .ff-chat-row.ff-chat-user{justify-content:flex-end;}
+  .ff-chat-bubble{
+    display:inline-block;
+    max-width:82%;
+    padding:10px 14px;
+    font-size:14px;
+    line-height:1.4;
+    border-radius:16px;
+  }
+  .ff-chat-bot .ff-chat-bubble{
+    background:var(--surface);
+    border:1px solid var(--parchment-dim);
+    color:var(--ink-soft);
+    border-radius:16px 16px 16px 4px;
+  }
+  .ff-chat-user .ff-chat-bubble{
+    background:var(--river);
+    color:var(--parchment);
+    border-radius:16px 16px 4px 16px;
+    font-weight:500;
+  }
   .ff-options{
     display:grid;
     grid-template-columns:1fr 1fr;
@@ -373,6 +416,29 @@
     box-shadow:0 1px 4px rgba(0,0,0,0.3);
   }
   .ff-map-load:disabled{opacity:0.7;cursor:default;}
+  .ff-map-layers{
+    background:var(--surface);
+    border:1px solid var(--brass);
+    border-radius:8px;
+    box-shadow:0 1px 4px rgba(0,0,0,0.25);
+    padding:7px 10px;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:11px;
+    color:var(--ink);
+  }
+  .ff-map-layers-row{
+    display:flex;
+    align-items:center;
+    gap:6px;
+    padding:2px 0;
+    cursor:pointer;
+    white-space:nowrap;
+  }
+  .ff-map-layers-row input{
+    margin:0;
+    accent-color:var(--moss);
+    cursor:pointer;
+  }
   .ff-cond-bar{
     display:flex;
     flex-wrap:wrap;
@@ -896,6 +962,16 @@
     .ff-options{grid-template-columns:1fr;}
     .ff-gear-grid{grid-template-columns:1fr;}
     .ff-h1{font-size:23px;}
+    .ff-app{padding:22px 16px 44px;}
+    .ff-hero{margin:4px 0 18px;max-height:150px;}
+    .ff-hero-img{max-height:150px;object-fit:cover;}
+    .ff-leader{margin-bottom:22px;}
+    .ff-transcript{max-height:38vh;margin-bottom:14px;}
+    .ff-chat-bubble{max-width:90%;font-size:13.5px;}
+    .ff-step:not([data-step="0"]) .ff-q{max-width:94%;font-size:18px;}
+    .ff-opt{padding:14px 12px;min-height:44px;}
+    .ff-chip{min-height:40px;display:flex;align-items:center;}
+    .ff-back{padding:10px 0;min-height:40px;}
   }
 </style>
 </head>
@@ -923,6 +999,8 @@
     <div class="ff-fly-marker" data-idx="5"></div>
   </div>
 
+  <div class="ff-transcript" id="ffTranscript"></div>
+
   <div class="ff-step active" data-step="0">
     <div class="ff-intro-ai" id="introAi" style="display:none">
       <p class="ff-q">Ask, and skip the quiz</p>
@@ -934,7 +1012,8 @@
       </div>
       <p class="ff-search-status" id="planStatus"></p>
     </div>
-    <div class="ff-search-card">
+    <button class="ff-skip ff-manual-toggle" id="manualToggle" type="button" style="display:none">Or type the water's name yourself &rarr;</button>
+    <div class="ff-search-card" id="manualSearchCard">
       <p class="ff-plain-label" id="plainSearchLabel">Search by name</p>
       <div class="ff-search-row">
         <input class="ff-search-input" id="searchInput" type="text" placeholder="e.g. Huron River, Belleville Lake, Cape Cod">
@@ -1119,7 +1198,69 @@
     });
   }
 
+  // ---- chat transcript: turns every finished step into a message bubble,
+  // so moving through the wizard reads like a running conversation ----
+  var transcript = [];
+  var waterLabels = {river:'Moving river', lake:'Lake or reservoir', pond:'Pond', ocean:'Ocean or bay'};
+  var methodLabels = {shore:'From shore', wading:'Wading', boat:'Boat', kayak:'Kayak or float'};
+  var tempLabels = {cold:'Cold, under 60\u00b0F', moderate:'Moderate, 60\u201375\u00b0F', warm:'Warm, 75\u00b0F+'};
+  var skyLabels = {bright:'Bright sun', overcast:'Overcast', lowlight:'Dawn or dusk'};
+  var windSpeedLabels = {calm:'Calm', breezy:'Breezy', windy:'Windy'};
+
+  function conditionsSummary(){
+    var bits = [];
+    if(state.temp) bits.push(tempLabels[state.temp] || state.temp);
+    if(state.sky) bits.push(skyLabels[state.sky] || state.sky);
+    if(state.windSpeed) bits.push((windSpeedLabels[state.windSpeed] || state.windSpeed) + (state.windDir ? ' from the ' + state.windDir : ''));
+    return bits.join(' \u00b7 ') || 'Set manually';
+  }
+
+  function upsertTranscript(step, q, a){
+    transcript = transcript.filter(function(t){ return t.step !== step; });
+    transcript.push({step: step, q: q, a: a});
+    transcript.sort(function(x, y){ return x.step - y.step; });
+  }
+
+  function renderTranscript(){
+    var el = document.getElementById('ffTranscript');
+    if(!el) return;
+    if(!transcript.length){
+      el.style.display = 'none';
+      el.innerHTML = '';
+      return;
+    }
+    el.style.display = 'flex';
+    el.innerHTML = transcript.map(function(t){
+      return '<div class="ff-chat-row ff-chat-bot"><span class="ff-chat-bubble">' + t.q + '</span></div>' +
+        '<div class="ff-chat-row ff-chat-user"><span class="ff-chat-bubble">' + t.a + '</span></div>';
+    }).join('');
+    el.scrollTop = el.scrollHeight;
+  }
+
+  // log the answer for whichever step we're leaving, based on current state
+  // — works no matter which UI path (search, AI ask, curated list) set it
+  function logStepAnswer(step){
+    if(step === 0 && state.location){
+      upsertTranscript(0, 'Where do you want to fish?', state.location.name + (state.location.region ? ' \u2014 ' + state.location.region : ''));
+    } else if(step === 1 && state.water){
+      upsertTranscript(1, 'Where are you fishing?', waterLabels[state.water] || state.water);
+    } else if(step === 2 && state.species){
+      upsertTranscript(2, 'What are you after?', (speciesInfo[state.species] && speciesInfo[state.species].label) || state.species);
+    } else if(step === 3 && state.method){
+      upsertTranscript(3, 'How are you fishing it?', methodLabels[state.method] || state.method);
+    } else if(step === 4 && state.temp && state.sky && state.windSpeed){
+      upsertTranscript(4, 'Conditions', conditionsSummary());
+    }
+  }
+
   function goToStep(idx){
+    var fromStep = currentStep;
+    if(idx > fromStep){
+      logStepAnswer(fromStep);
+    } else if(idx < fromStep){
+      // stepping back to revise an earlier answer — drop anything after it
+      transcript = transcript.filter(function(t){ return t.step < idx; });
+    }
     document.querySelectorAll('.ff-step').forEach(function(s){
       s.classList.toggle('active', parseInt(s.dataset.step,10) === idx);
     });
@@ -1130,6 +1271,11 @@
       seg.classList.toggle('done', parseInt(seg.dataset.idx,10) < idx);
     });
     currentStep = idx;
+    renderTranscript();
+    if(idx > 0 && idx < 5){
+      var active = document.querySelector('.ff-step[data-step="' + idx + '"]');
+      if(active) active.scrollIntoView({behavior:'smooth', block:'start'});
+    }
   }
 
   function selectChip(field, value){
@@ -2425,6 +2571,17 @@
     document.getElementById('planInput').addEventListener('keydown', function(e){
       if(e.key === 'Enter') sendPlan();
     });
+    // when the AI box is available, lead with ONE conversational input instead
+    // of two competing boxes — the manual search becomes an optional fallback
+    var manualCard = document.getElementById('manualSearchCard');
+    var manualToggle = document.getElementById('manualToggle');
+    manualCard.style.display = 'none';
+    manualToggle.style.display = '';
+    manualToggle.addEventListener('click', function(){
+      manualCard.style.display = '';
+      manualToggle.style.display = 'none';
+      document.getElementById('searchInput').focus();
+    });
   }
 
   document.getElementById('skipSearch').addEventListener('click', function(){
@@ -2563,6 +2720,7 @@
     saveChatHistory();
     state = {location:null, notes:null, aiRefine:null, recentWeather:null, gauge:null, tide:null, bestWindow:null, access:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
     lastRec = null;
+    transcript = [];
     document.querySelectorAll('.ff-opt, .ff-chip, .ff-dir').forEach(function(b){ b.classList.remove('selected'); });
     document.getElementById('locateStatus').textContent = '';
     document.getElementById('gaugeStatus').textContent = '';
@@ -3326,6 +3484,7 @@
     if(state.location && window.L){
       html += '<div class="ff-info-card"><p class="ff-info-label">Map</p><div id="resultMap" class="ff-map"></div>' +
         '<p class="ff-map-legend"><span class="lg" style="background:#16302B"></span>Your spot' +
+        '<span class="lg" style="background:#4C6249;border-radius:2px;width:12px;height:4px;"></span>River' +
         '<span class="lg" style="background:#B58A4A"></span>Access &amp; launches' +
         '<span class="lg" style="background:#4C6249"></span>Public land' +
         '<span class="lg" style="background:#C0392B"></span>Gauge (red = high/rising)</p></div>';
@@ -3732,14 +3891,30 @@
     return div;
   }
 
-  function renderMap(){
+  function renderMap(retryCount){
     var el = document.getElementById('resultMap');
     if(!el || !window.L || !state.location) return;
+    // the results step's container can still report zero size for a frame or two
+    // right after it becomes visible (layout hasn't settled yet) — Leaflet throws
+    // internal geometry errors if initialized against a zero-size element, so wait
+    // for real dimensions before proceeding, retrying briefly instead of guessing a fixed delay
+    if((el.offsetWidth === 0 || el.offsetHeight === 0)){
+      retryCount = (retryCount || 0) + 1;
+      if(retryCount > 20) return; // ~1s of retries — give up quietly rather than throw
+      setTimeout(function(){ renderMap(retryCount); }, 50);
+      return;
+    }
     if(resultMap){
       resultMap.remove();
       resultMap = null;
     }
     resultMap = L.map(el);
+    // give the map a real initial view right away — Leaflet's vector renderer
+    // (used by circleMarker/polyline) isn't fully ready until the map has
+    // been through its first setView, so calling fitBounds() later as the
+    // very first view-set (with vector layers already attached) throws
+    // internal errors. Setting a view now, before any layers are added, avoids that.
+    resultMap.setView([state.location.lat, state.location.lon], 12);
     L.tileLayer('https://maps.geoapify.com/v1/tile/osm-bright/{z}/{x}/{y}.png?apiKey=' + GEOAPIFY_KEY, {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://www.geoapify.com/">Geoapify</a>',
       maxZoom: 19
@@ -3751,6 +3926,13 @@
         '<br><a href="https://www.google.com/maps?q=' + lat + ',' + lon + '" target="_blank" rel="noopener">Directions ↗</a></div>';
     }
 
+    // separate layer groups so the floating "Map layers" panel can toggle
+    // each kind on/off independently, like a real GIS view
+    var riverLayer = L.layerGroup().addTo(resultMap);
+    var accessLayer = L.layerGroup().addTo(resultMap);
+    var landLayer = L.layerGroup().addTo(resultMap);
+    var gaugeLayer = L.layerGroup().addTo(resultMap);
+
     var loc = state.location;
     var locMarker = L.circleMarker([loc.lat, loc.lon], {radius:9, color:'#16302B', fillColor:'#16302B', fillOpacity:0.9});
     locMarker.bindPopup(popupHtml('Your spot: ' + loc.name, loc.region, loc.lat, loc.lon)).addTo(resultMap);
@@ -3758,7 +3940,7 @@
 
     (state.access || []).forEach(function(a){
       var m = L.circleMarker([a.lat, a.lon], {radius:7, color:'#8C6A38', fillColor:'#B58A4A', fillOpacity:0.9});
-      m.bindPopup(spotPopup(a.name || a.kind, a.kind + ' · ' + a.dist.toFixed(1) + ' mi', {name: a.name || a.kind, lat: a.lat, lon: a.lon})).addTo(resultMap);
+      m.bindPopup(spotPopup(a.name || a.kind, a.kind + ' · ' + a.dist.toFixed(1) + ' mi', {name: a.name || a.kind, lat: a.lat, lon: a.lon})).addTo(accessLayer);
       pts.push([a.lat, a.lon]);
     });
 
@@ -3771,7 +3953,7 @@
       var warn = hazard ? '<br><strong style="color:#C0392B">⚠ Rising fast (+' + g.trendPct + '% in 24h)</strong> — water may be high and muddy; wading can be dangerous.' : '';
       gm.bindPopup('<div class="ff-map-popup"><strong>USGS gauge</strong><br>' + g.name +
         (g.flow != null ? '<br>' + Math.round(g.flow) + ' cfs' + (g.waterTempF != null ? ' · ' + g.waterTempF + '°F' : '') : '') + warn +
-        '<br><a href="https://waterdata.usgs.gov/monitoring-location/' + g.code + '" target="_blank" rel="noopener">Live gauge ↗</a></div>').addTo(resultMap);
+        '<br><a href="https://waterdata.usgs.gov/monitoring-location/' + g.code + '" target="_blank" rel="noopener">Live gauge ↗</a></div>').addTo(gaugeLayer);
       pts.push([g.lat, g.lon]);
     }
 
@@ -3780,6 +3962,57 @@
     } else {
       resultMap.setView(pts[0], 12);
     }
+
+    // trace the actual river/stream geometry from OpenStreetMap so the map
+    // shows the real line of the water, not just a single pin — rivers only,
+    // since lakes/ponds don't have a meaningful "path"
+    var riverName = (state.notes && state.notes.name) || loc.waterHint || loc.name;
+    if((state.water === 'river' || !state.water) && riverName && detectWaterType(riverName)){
+      var escaped = riverName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      var rq = '[out:json][timeout:25];way["waterway"~"^(river|stream)$"]["name"~"' + escaped + '",i](around:30000,' + loc.lat + ',' + loc.lon + ');out geom;';
+      overpassFetch(rq).then(function(data){
+        var ridden = [];
+        (data.elements || []).forEach(function(e){
+          if(!e.geometry || !e.geometry.length) return;
+          var line = e.geometry.map(function(pt){ return [pt.lat, pt.lon]; });
+          L.polyline(line, {color:'#4C6249', weight:4, opacity:0.75}).addTo(riverLayer);
+          ridden = ridden.concat(line);
+        });
+        if(ridden.length){
+          var allPts = pts.concat(ridden);
+          resultMap.fitBounds(allPts, {padding:[30, 30], maxZoom: 13});
+        }
+      }).catch(function(){});
+    }
+
+    // floating checkbox panel to toggle each layer, matching a real GIS view
+    var LayersCtl = L.Control.extend({
+      options: {position: 'topleft'},
+      onAdd: function(){
+        var wrap = L.DomUtil.create('div', 'ff-map-layers');
+        L.DomEvent.disableClickPropagation(wrap);
+        var rows = [
+          {label:'River', layer:riverLayer, on:true},
+          {label:'Access points', layer:accessLayer, on:true},
+          {label:'Public land', layer:landLayer, on:true},
+          {label:'USGS gauge', layer:gaugeLayer, on:true}
+        ];
+        rows.forEach(function(row){
+          var lbl = L.DomUtil.create('label', 'ff-map-layers-row', wrap);
+          var cb = document.createElement('input');
+          cb.type = 'checkbox';
+          cb.checked = row.on;
+          cb.addEventListener('change', function(){
+            if(cb.checked) resultMap.addLayer(row.layer);
+            else resultMap.removeLayer(row.layer);
+          });
+          lbl.appendChild(cb);
+          lbl.appendChild(document.createTextNode(row.label));
+        });
+        return wrap;
+      }
+    });
+    resultMap.addControl(new LayersCtl());
 
     // zoom out and pull in every launch & access point in view, on demand
     var seen = {};
@@ -3817,14 +4050,14 @@
                 var lkey = 'L' + elat.toFixed(3) + ',' + elon.toFixed(3);
                 if(seen[lkey]) return; seen[lkey] = 1; land++;
                 L.circleMarker([elat, elon], {radius:6, color:'#3E6B4F', fillColor:'#4C6249', fillOpacity:0.65})
-                  .bindPopup(spotPopup(t.name || 'Public land', 'Known public land — verify access & rules.', {name: t.name || 'Public land', lat: elat, lon: elon})).addTo(resultMap);
+                  .bindPopup(spotPopup(t.name || 'Public land', 'Known public land — verify access & rules.', {name: t.name || 'Public land', lat: elat, lon: elon})).addTo(landLayer);
                 return;
               }
               var key = elat.toFixed(4) + ',' + elon.toFixed(4);
               if(seen[key]) return; seen[key] = 1; added++;
               var kind = t.leisure === 'slipway' ? 'Boat / canoe launch' : 'Fishing access';
               L.circleMarker([elat, elon], {radius:6, color:'#8C6A38', fillColor:'#B58A4A', fillOpacity:0.85})
-                .bindPopup(spotPopup(t.name || kind, kind, {name: t.name || kind, lat: elat, lon: elon})).addTo(resultMap);
+                .bindPopup(spotPopup(t.name || kind, kind, {name: t.name || kind, lat: elat, lon: elon})).addTo(accessLayer);
             });
             var msg = [];
             if(added) msg.push('+' + added + ' access');
@@ -3837,6 +4070,10 @@
       }
     });
     resultMap.addControl(new LoadCtl());
+
+    // safety net: fonts/layout can still shift the container size slightly
+    // right after init on some devices — re-measure once things settle
+    setTimeout(function(){ if(resultMap) resultMap.invalidateSize(); }, 300);
   }
 
   // ---- full-screen explore map ----
