@@ -193,6 +193,20 @@
     cursor:pointer;
   }
   .ff-result-item:hover{border-color:var(--brass);}
+  .ff-known-tag{
+    display:block;
+    font-family:'IBM Plex Mono',monospace;
+    font-size:10px;
+    font-weight:600;
+    letter-spacing:0.05em;
+    text-transform:uppercase;
+    color:#fff;
+    background:var(--rust);
+    border-radius:20px;
+    padding:2px 8px;
+    width:fit-content;
+    margin-bottom:6px;
+  }
   .ff-result-item .rn{font-weight:600;}
   .ff-result-item .rd{
     display:block;
@@ -2159,11 +2173,55 @@
     return out;
   }
 
-  function nearbyWaters(lat, lon, label, stateName, country){
+  // OSM's Overpass search only looks ~10 miles out, so it surfaces the
+  // literal closest named puddle rather than the water anglers actually go
+  // to. Cross-check our curated, reputation-vetted rivers (WATER_NOTES) out
+  // to a much wider radius and, when the requested species is a match,
+  // list those first — e.g. Dearborn Heights should surface the Huron River
+  // (Metro Detroit's known smallmouth water) even though several unnamed
+  // creeks sit closer on the map.
+  function curatedNearbyForSpecies(lat, lon, species, maxMi){
+    var out = [];
+    for(var i = 0; i < WATER_NOTES.length; i++){
+      var w = WATER_NOTES[i];
+      if(w.lat == null || w.lon == null) continue;
+      if(species && w.species && w.species.indexOf(species) === -1) continue;
+      var dist = haversineMi(lat, lon, w.lat, w.lon);
+      if(dist <= maxMi) out.push({name:w.name, water:'river', lat:w.lat, lon:w.lon, dist:dist, notes:w});
+    }
+    out.sort(function(a, b){ return a.dist - b.dist; });
+    return out;
+  }
+
+  function nearbyWaters(lat, lon, label, stateName, country, species){
     var status = document.getElementById('searchStatus');
     var results = document.getElementById('searchResults');
     results.innerHTML = '';
     status.textContent = 'Looking for waters near ' + label + '...';
+    var curated = curatedNearbyForSpecies(lat, lon, species, 60).slice(0, 3);
+    function addResultButton(w, isCurated){
+      var btn = document.createElement('button');
+      btn.className = 'ff-result-item';
+      var kindLabel = w.water === 'river' ? 'River / stream' : (w.water === 'pond' ? 'Pond' : 'Lake');
+      var tag = isCurated ? '<span class="ff-known-tag">Known ' + (species || 'fishing') + ' water</span>' : '';
+      btn.innerHTML = tag + '<span class="rn">' + w.name + '</span><span class="rd">' + kindLabel + ' · ' + w.dist.toFixed(1) + ' mi from ' + label + '</span>';
+      btn.addEventListener('click', function(){
+        state.location = {name:w.name, region:[label, stateName].filter(Boolean).join(', '), state:stateName, lat:w.lat, lon:w.lon, country:country};
+        state.notes = w.notes || findWaterNotes(w.name, stateName);
+        status.textContent = 'Set: ' + w.name;
+        fetchWeather(w.lat, w.lon, document.getElementById('locateStatus')).catch(function(){});
+        if(country === 'United States'){
+          fetchGauge(w.lat, w.lon);
+        }
+        fetchAccess(w.lat, w.lon);
+        setWater(w.water);
+        goToStep(2);
+      });
+      results.appendChild(btn);
+    }
+    if(curated.length){
+      curated.forEach(function(w){ addResultButton(w, true); });
+    }
     var q = '[out:json][timeout:20];(way["waterway"~"^(river|stream)$"]["name"](around:16000,' + lat + ',' + lon + ');' +
             'nwr["natural"="water"]["name"](around:16000,' + lat + ',' + lon + '););out center tags 80;';
     overpassFetch(q).then(function(data){
@@ -2190,32 +2248,18 @@
         }
       });
       items.sort(function(a, b){ return a.dist - b.dist; });
-      if(!items.length){
+      // drop anything already shown in the curated list above
+      var curatedNames = {};
+      curated.forEach(function(w){ curatedNames[w.name.toLowerCase()] = true; });
+      items = items.filter(function(w){ return !curatedNames[w.name.toLowerCase()]; });
+      if(!items.length && !curated.length){
         status.textContent = 'No named waters mapped near ' + label + '. Try searching the water\'s name directly.';
         return;
       }
-      status.textContent = 'Waters near ' + label + ':';
-      items.slice(0, 8).forEach(function(w){
-        var btn = document.createElement('button');
-        btn.className = 'ff-result-item';
-        var kindLabel = w.water === 'river' ? 'River / stream' : (w.water === 'pond' ? 'Pond' : 'Lake');
-        btn.innerHTML = '<span class="rn">' + w.name + '</span><span class="rd">' + kindLabel + ' · ' + w.dist.toFixed(1) + ' mi from ' + label + '</span>';
-        btn.addEventListener('click', function(){
-          state.location = {name:w.name, region:[label, stateName].filter(Boolean).join(', '), state:stateName, lat:w.lat, lon:w.lon, country:country};
-          state.notes = findWaterNotes(w.name, stateName);
-          status.textContent = 'Set: ' + w.name;
-          fetchWeather(w.lat, w.lon, document.getElementById('locateStatus')).catch(function(){});
-          if(country === 'United States'){
-            fetchGauge(w.lat, w.lon);
-          }
-          fetchAccess(w.lat, w.lon);
-          setWater(w.water);
-          goToStep(2);
-        });
-        results.appendChild(btn);
-      });
+      status.textContent = curated.length ? 'Other waters near ' + label + ':' : 'Waters near ' + label + ':';
+      items.slice(0, 8).forEach(function(w){ addResultButton(w, false); });
     }).catch(function(){
-      status.textContent = 'Couldn\'t search nearby waters right now — try again in a moment.';
+      if(!curated.length) status.textContent = 'Couldn\'t search nearby waters right now — try again in a moment.';
     });
   }
 
@@ -2296,7 +2340,7 @@
       // a town result: hand off to the nearby-waters finder
       if(hit.type === 'city'){
         statusEl.textContent = '';
-        nearbyWaters(r.lat, r.lon, name, r.state, r.country);
+        nearbyWaters(r.lat, r.lon, name, r.state, r.country, plan.species);
         return;
       }
       state.location = {name:name, region:region, state:r.state, lat:r.lat, lon:r.lon, country:r.country};
