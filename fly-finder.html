@@ -292,11 +292,16 @@
     min-height:16px;
   }
   .ff-subq{
+    display:inline-block;
     font-family:'Inter',sans-serif;
-    font-weight:600;
+    font-weight:500;
     font-size:13px;
-    color:var(--ink);
-    margin:20px 0 10px;
+    color:var(--ink-soft);
+    background:var(--surface);
+    border:1px solid var(--parchment-dim);
+    border-radius:14px 14px 14px 4px;
+    padding:8px 12px;
+    margin:16px 0 8px;
   }
   .ff-row-opts{
     display:flex;
@@ -322,36 +327,20 @@
     color:var(--parchment);
   }
   .ff-compass{
-    position:relative;
-    width:150px;
-    height:150px;
-    margin:6px 0 22px;
-  }
-  .ff-compass-ring{
-    position:absolute;
-    inset:0;
-    border:1px dashed var(--parchment-dim);
-    border-radius:50%;
-  }
-  .ff-compass-center{
-    position:absolute;
-    top:50%;left:50%;
-    width:6px;height:6px;
-    background:var(--brass);
-    border-radius:50%;
-    transform:translate(-50%,-50%);
+    display:flex;
+    flex-wrap:wrap;
+    gap:8px;
+    margin:0 0 6px;
   }
   .ff-dir{
-    position:absolute;
-    width:28px;height:28px;
-    border-radius:50%;
-    background:var(--parchment);
-    border:1px solid var(--parchment-dim);
     font-family:'IBM Plex Mono',monospace;
-    font-size:10px;
+    font-size:12px;
     font-weight:500;
     color:var(--ink);
-    display:flex;align-items:center;justify-content:center;
+    background:var(--parchment);
+    border:1px solid var(--parchment-dim);
+    border-radius:2px;
+    padding:8px 12px;
     cursor:pointer;
   }
   .ff-dir:hover{border-color:var(--brass);}
@@ -972,6 +961,14 @@
     .ff-opt{padding:14px 12px;min-height:44px;}
     .ff-chip{min-height:40px;display:flex;align-items:center;}
     .ff-back{padding:10px 0;min-height:40px;}
+    /* once the conversation is underway, the hero photo and header copy have
+       done their job — collapse them so the chat thread and current question
+       are visible without scrolling past a big fixed image every step */
+    .ff-app.ff-in-flow .ff-hero,
+    .ff-app.ff-in-flow .ff-eyebrow,
+    .ff-app.ff-in-flow .ff-sub{display:none;}
+    .ff-app.ff-in-flow .ff-h1{font-size:16px;margin-bottom:14px;}
+    .ff-app.ff-in-flow .ff-leader{margin:0 0 16px;}
   }
 </style>
 </head>
@@ -1086,16 +1083,14 @@
 
     <p class="ff-subq">Wind direction</p>
     <div class="ff-compass" id="compass">
-      <div class="ff-compass-ring"></div>
-      <div class="ff-compass-center"></div>
-      <div class="ff-dir" data-field="windDir" data-value="N" style="top:6px;left:61px;">N</div>
-      <div class="ff-dir" data-field="windDir" data-value="NE" style="top:22px;left:100px;">NE</div>
-      <div class="ff-dir" data-field="windDir" data-value="E" style="top:61px;left:116px;">E</div>
-      <div class="ff-dir" data-field="windDir" data-value="SE" style="top:100px;left:100px;">SE</div>
-      <div class="ff-dir" data-field="windDir" data-value="S" style="top:116px;left:61px;">S</div>
-      <div class="ff-dir" data-field="windDir" data-value="SW" style="top:100px;left:22px;">SW</div>
-      <div class="ff-dir" data-field="windDir" data-value="W" style="top:61px;left:6px;">W</div>
-      <div class="ff-dir" data-field="windDir" data-value="NW" style="top:22px;left:22px;">NW</div>
+      <div class="ff-dir" data-field="windDir" data-value="N">N</div>
+      <div class="ff-dir" data-field="windDir" data-value="NE">NE</div>
+      <div class="ff-dir" data-field="windDir" data-value="E">E</div>
+      <div class="ff-dir" data-field="windDir" data-value="SE">SE</div>
+      <div class="ff-dir" data-field="windDir" data-value="S">S</div>
+      <div class="ff-dir" data-field="windDir" data-value="SW">SW</div>
+      <div class="ff-dir" data-field="windDir" data-value="W">W</div>
+      <div class="ff-dir" data-field="windDir" data-value="NW">NW</div>
     </div>
 
     <p class="ff-locate-status" id="gaugeStatus"></p>
@@ -1272,6 +1267,8 @@
     });
     currentStep = idx;
     renderTranscript();
+    var appEl = document.querySelector('.ff-app');
+    if(appEl) appEl.classList.toggle('ff-in-flow', idx > 0);
     if(idx > 0 && idx < 5){
       var active = document.querySelector('.ff-step[data-step="' + idx + '"]');
       if(active) active.scrollIntoView({behavior:'smooth', block:'start'});
