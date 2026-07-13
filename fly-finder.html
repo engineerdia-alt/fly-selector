@@ -3909,6 +3909,12 @@
       resultMap = null;
     }
     resultMap = L.map(el);
+    // give the map a real initial view right away — Leaflet's vector renderer
+    // (used by circleMarker/polyline) isn't fully ready until the map has
+    // been through its first setView, so calling fitBounds() later as the
+    // very first view-set (with vector layers already attached) throws
+    // internal errors. Setting a view now, before any layers are added, avoids that.
+    resultMap.setView([state.location.lat, state.location.lon], 12);
     L.tileLayer('https://maps.geoapify.com/v1/tile/osm-bright/{z}/{x}/{y}.png?apiKey=' + GEOAPIFY_KEY, {
       attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors &copy; <a href="https://www.geoapify.com/">Geoapify</a>',
       maxZoom: 19
