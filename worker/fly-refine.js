@@ -79,7 +79,14 @@ async function callAnthropic(env, opts) {
   const payload = {
     model: opts.model || MODEL,
     max_tokens: opts.maxTokens,
-    messages: opts.messages
+    messages: opts.messages,
+    // Claude Sonnet 5 runs adaptive thinking by default (unlike Haiku 4.5).
+    // None of our prompts need multi-step reasoning — they're strict-JSON
+    // extraction or a short synthesis of facts we already hand it in the
+    // prompt — so thinking only ate into max_tokens and, worse, pushed a
+    // leading `thinking` content block in front of the actual answer.
+    // Disabling it keeps responses fast, cheap, and text-first.
+    thinking: { type: 'disabled' }
   };
   if (opts.system) {
     payload.system = [{ type: 'text', text: opts.system, cache_control: { type: 'ephemeral' } }];
@@ -98,7 +105,14 @@ async function callAnthropic(env, opts) {
 }
 
 function textOf(r) {
-  return (r.body.content && r.body.content[0] && r.body.content[0].text) || '';
+  // Belt-and-suspenders: even with thinking disabled, don't assume the
+  // answer is content[0] — concatenate every text block in order. This is
+  // what actually broke follow-up questions in the Ask chat: Sonnet 5's
+  // adaptive thinking put a `thinking` block (no `text` field) at
+  // content[0], so grabbing content[0].text returned undefined and the
+  // app showed "No answer came back" even though Claude had answered.
+  const blocks = (r.body.content || []).filter(function (b) { return b.type === 'text' && b.text; });
+  return blocks.map(function (b) { return b.text; }).join('\n\n');
 }
 
 export default {
