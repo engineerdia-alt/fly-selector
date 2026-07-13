@@ -2779,15 +2779,21 @@
       secondaryLabel = 'Browse all flies \u2197';
       secondaryUrl = shopUrl('saltwater');
     } else {
-      primary = 'Woolly Bugger';
-      term = 'woolly bugger';
-      color = t === 'cold' ? 'black or olive' : 'olive or brown';
-      reasoning = 'A searching streamer pattern covers water fast when there is no specific hatch to match, which works well across most trout water.';
-      lineType = 'floating line';
-      alternates = [
-        {name:'Pheasant Tail Nymph', term:'pheasant tail nymph', color:'natural'},
-        {name:'Parachute Adams', term:'parachute adams', color:'gray'}
-      ];
+      var hatch = hatchOverride(t);
+      if(hatch){
+        primary = hatch.primary; term = hatch.term; color = hatch.color;
+        reasoning = hatch.reasoning; lineType = hatch.lineType; alternates = hatch.alternates;
+      } else {
+        primary = 'Woolly Bugger';
+        term = 'woolly bugger';
+        color = t === 'cold' ? 'black or olive' : 'olive or brown';
+        reasoning = 'A searching streamer pattern covers water fast when there is no specific hatch to match, which works well across most trout water.';
+        lineType = 'floating line';
+        alternates = [
+          {name:'Pheasant Tail Nymph', term:'pheasant tail nymph', color:'natural'},
+          {name:'Parachute Adams', term:'parachute adams', color:'gray'}
+        ];
+      }
       secondaryLabel = 'Browse all flies \u2197';
       secondaryUrl = shopUrl('trout');
     }
@@ -2799,7 +2805,49 @@
       reasoning += ' Flow is dropping and the water is likely clearing — lean smaller and more natural, with a longer, lighter leader.';
     }
 
+    // location-specific flavor: fold in curated per-water notes when this is
+    // a recognized storied water, so the same species/temp/sky combo reads
+    // differently on different rivers instead of repeating boilerplate.
+    if(state.notes && state.notes.hatches){
+      reasoning += ' Local intel for ' + state.notes.name + ': ' + state.notes.hatches;
+    }
+
     return {primary:primary, term:term, color:color, reasoning:reasoning, lineType:lineType, alternates:alternates, secondaryLabel:secondaryLabel, secondaryUrl:secondaryUrl};
+  }
+
+  // picks an actual, currently-relevant hatch pattern for trout using the
+  // region + month hatch calendar (HATCHES / likelyHatches), instead of
+  // always defaulting to a generic searching streamer. Falls back to null
+  // (generic Woolly Bugger logic) when there's no location/region match.
+  function hatchOverride(t){
+    var hits = likelyHatches();
+    if(!hits || !hits.length) return null;
+    var primaryHit = hits[hits.length - 1];
+    var label = primaryHit.term.replace(/\s*fly\s*$/i, '').trim();
+    label = label.charAt(0).toUpperCase() + label.slice(1);
+    var reasoning = 'This is prime ' + primaryHit.name.toLowerCase() + ' season for this region right now \u2014 ' + primaryHit.tip + '.';
+    var others = hits.slice(0, -1);
+    if(others.length){
+      reasoning += ' It overlaps with ' + others.map(function(h){ return h.name.toLowerCase(); }).join(' and ') + ', so don\'t be surprised to see both.';
+    }
+    var alternates = others.map(function(h){
+      var n = h.term.replace(/\s*fly\s*$/i, '').trim();
+      return {name:n.charAt(0).toUpperCase() + n.slice(1), term:h.term, color:'natural'};
+    });
+    while(alternates.length < 2){
+      alternates.push(alternates.length === 0
+        ? {name:'Pheasant Tail Nymph', term:'pheasant tail nymph', color:'natural'}
+        : {name:'Parachute Adams', term:'parachute adams', color:'gray'});
+    }
+    return {
+      primary: label,
+      term: primaryHit.term,
+      color: 'natural, sized and colored to match the real bug',
+      reasoning: reasoning,
+      lineType: t === 'cold'
+        ? 'floating line, but nymph the same pattern subsurface if nothing is up top'
+        : 'floating line for dries, dropped down as a nymph if fish aren\'t looking up'
+    , alternates: alternates.slice(0, 2)};
   }
 
   function seasonalForage(){
