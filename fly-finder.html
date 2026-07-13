@@ -2823,15 +2823,17 @@
     var hits = likelyHatches();
     if(!hits || !hits.length) return null;
     var primaryHit = hits[hits.length - 1];
-    var label = primaryHit.term.replace(/\s*fly\s*$/i, '').trim();
-    label = label.charAt(0).toUpperCase() + label.slice(1);
+    // only strip a trailing " fly" word, not a compound like "salmonfly"
+    // where "fly" isn't a separate word
+    var label = primaryHit.term.replace(/\s+fly\s*$/i, '').trim();
+    label = label.toLowerCase() === 'pmd' ? 'PMD' : (label.charAt(0).toUpperCase() + label.slice(1));
     var reasoning = 'This is prime ' + primaryHit.name.toLowerCase() + ' season for this region right now \u2014 ' + primaryHit.tip + '.';
     var others = hits.slice(0, -1);
     if(others.length){
       reasoning += ' It overlaps with ' + others.map(function(h){ return h.name.toLowerCase(); }).join(' and ') + ', so don\'t be surprised to see both.';
     }
     var alternates = others.map(function(h){
-      var n = h.term.replace(/\s*fly\s*$/i, '').trim();
+      var n = h.term.replace(/\s+fly\s*$/i, '').trim();
       return {name:n.charAt(0).toUpperCase() + n.slice(1), term:h.term, color:'natural'};
     });
     while(alternates.length < 2){
