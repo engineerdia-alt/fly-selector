@@ -1,0 +1,12 @@
+{
+  "name": "fly-refine-worker",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test fly-refine.test.js",
+    "lint:ci": "node --check fly-refine.js && node --check fly-refine.test.js && npm test"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
