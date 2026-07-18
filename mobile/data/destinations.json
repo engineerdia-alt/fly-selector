@@ -1,0 +1,825 @@
+[
+  {
+    "name": "Au Sable River",
+    "species": [
+      "trout",
+      "steelhead"
+    ],
+    "state": "Michigan",
+    "lat": 44.66,
+    "lon": -84.62,
+    "match": "au\\s*sable",
+    "hook": "Michigan's most storied trout river and the birthplace of Trout Unlimited. Sandy, spring-fed, and wadeable, with brook and brown trout in the upper river.",
+    "hatches": "Hendricksons late April–May, sulphurs and brown drakes in June, then the famous Hex hatch at night from late June into mid-July. Fall is streamer season for the biggest browns.",
+    "regs": "The \"Holy Water\" from Burton's Landing to Wakeley Bridge is flies-only, catch-and-release.",
+    "stretches": "Holy Water for numbers of fish, the South Branch through the Mason Tract for solitude, and below Mio dam for trophy browns."
+  },
+  {
+    "name": "Pere Marquette River",
+    "species": [
+      "trout",
+      "steelhead"
+    ],
+    "state": "Michigan",
+    "lat": 43.9,
+    "lon": -85.85,
+    "match": "pere\\s*marquette",
+    "hook": "A wild, undammed river with resident browns plus heavy runs of salmon in fall and steelhead through winter and spring.",
+    "hatches": "Gray drakes and sulphurs May–June, hoppers in August. King salmon August–October; steelhead November through April.",
+    "regs": "The flies-only, no-kill section runs from the M-37 bridge down to Gleason's Landing.",
+    "stretches": "The Baldwin-area flies-only water wades well; the lower river fishes best from a drift boat."
+  },
+  {
+    "name": "Manistee River",
+    "species": [
+      "trout",
+      "steelhead"
+    ],
+    "state": "Michigan",
+    "lat": 44.64,
+    "lon": -84.98,
+    "match": "manistee",
+    "hook": "The Au Sable's quieter twin — classic sand-and-gravel brook and brown trout water in the upper river, big migratory fish below Tippy Dam.",
+    "hatches": "A similar calendar to the Au Sable: drakes and Hex in the slower reaches late June–July, hoppers in August. Below Tippy: salmon in fall, steelhead November–April.",
+    "regs": "Artificials-only with special size limits between M-72 and CCC Bridge on the upper river.",
+    "stretches": "Yellow Trees Landing to CCC Bridge up top; Tippy Dam down to High Bridge for salmon and steelhead."
+  },
+  {
+    "name": "Muskegon River",
+    "species": [
+      "steelhead",
+      "trout",
+      "bass"
+    ],
+    "state": "Michigan",
+    "lat": 43.44,
+    "lon": -85.66,
+    "match": "muskegon",
+    "hook": "A big, year-round tailwater below Croton Dam with browns, rainbows, and some of Michigan's heaviest steelhead and salmon runs.",
+    "hatches": "Caddis and gray drakes May–June for residents; salmon September–October; steelhead November–April with the peak around the spring spawn.",
+    "regs": "Standard Michigan trout rules on most water — check the current fishing guide for the stretch you're on.",
+    "stretches": "Croton Dam down through Newaygo: drift-boat water with plenty of wadeable gravel at moderate flows."
+  },
+  {
+    "name": "Huron River",
+    "species": [
+      "bass",
+      "panfish",
+      "carp",
+      "pike",
+      "trout"
+    ],
+    "state": "Michigan",
+    "lat": 42.28,
+    "lon": -83.74,
+    "match": "huron\\s*river",
+    "hook": "Metro Detroit's home water and one of the best smallmouth float fisheries in the Midwest, with a spring trout section up top.",
+    "hatches": "Smallmouth from late April through October — topwater in summer low light. Carp on the impoundment flats in summer.",
+    "regs": "The trout water below the Proud Lake dam has special early-season rules; the rest is standard warm-water regs.",
+    "stretches": "Proud Lake to Milford for April browns; Hudson Mills to Delhi for smallmouth; below Belleville and Flat Rock dams on the lower river."
+  },
+  {
+    "name": "Rogue River",
+    "species": [
+      "trout",
+      "steelhead",
+      "bass",
+      "pike",
+      "panfish"
+    ],
+    "state": "Michigan",
+    "lat": 43.121,
+    "lon": -85.56,
+    "match": "rogue\\s*river",
+    "hook": "A tributary of the Grand near Rockford, north of Grand Rapids — a designated trout stream up top with a strong fall/spring steelhead run, and smallmouth in the warmer lower reaches.",
+    "hatches": "Hendricksons and sulphurs May–June, caddis and hoppers through summer on the trout water. Steelhead run in from the Grand in fall and again in spring; summer runs warm and pushes trout to the coolest, shaded stretches.",
+    "regs": "The designated trout portion around and above Rockford has gear/season rules — check the Michigan DNR trout guide for your exact stretch; the dam at Rockford is a key steelhead staging spot.",
+    "stretches": "Above Rockford dam for stream trout; the dam area and downstream for staging steelhead; the lower, warmer river for summer smallmouth."
+  },
+  {
+    "name": "Paint Creek",
+    "species": [
+      "trout",
+      "bass",
+      "panfish"
+    ],
+    "state": "Michigan",
+    "lat": 42.735,
+    "lon": -83.23,
+    "match": "paint\\s*creek",
+    "hook": "Oakland County's designated coldwater trout stream, following the Paint Creek Trail through Rochester — small, wadeable, and stocked, with wild browns holding in the shaded stretches.",
+    "hatches": "Blue-winged olives and Hendricksons in spring, sulphurs and caddis into early summer, terrestrials (ants, beetles, hoppers) in late summer. Summer heat is the real limiter — fish the cool dawn window.",
+    "regs": "Designated trout stream with gear restrictions — large portions prohibit live bait and have catch-and-release / artificial-only rules. Verify the Michigan DNR regs for your section before fishing.",
+    "stretches": "The trail crossings — Tienken Rd, Dutton Rd, Silverbell Rd, and the Cider Mill — give easy access; walk upstream from each for deeper, shaded pools."
+  },
+  {
+    "name": "Clinton River",
+    "species": [
+      "bass",
+      "trout",
+      "pike",
+      "panfish",
+      "carp"
+    ],
+    "state": "Michigan",
+    "lat": 42.64,
+    "lon": -83.03,
+    "match": "clinton\\s*river",
+    "hook": "Metro Detroit's other home water — a stocked trout section in the upper river near Yates, warming to a solid smallmouth and pike fishery through the middle and lower reaches to Lake St. Clair.",
+    "hatches": "Trout on BWOs and caddis spring through early summer in the upper river; smallmouth and pike from May into fall lower down. Steelhead and salmon push up from Lake St. Clair in season.",
+    "regs": "The Yates-area trout stretch has special regs; the rest is standard warm-water. Check the Michigan DNR guide for the Yates dam section.",
+    "stretches": "The upper river near Yates for stocked trout; below the dams and through Clinton River Park for smallmouth and pike; the lower river and spillway for run fish."
+  },
+  {
+    "name": "Madison River",
+    "species": [
+      "trout"
+    ],
+    "state": "Montana",
+    "lat": 45.13,
+    "lon": -111.72,
+    "match": "madison",
+    "hook": "\"The 50-mile riffle\" — fast, bouldery water absolutely stuffed with browns and rainbows.",
+    "hatches": "Salmonflies late June–early July moving upstream day by day; hoppers in August; streamers in fall.",
+    "regs": "The stretch between Quake and Ennis lakes is wade-only for much of the season — check current combined regs.",
+    "stretches": "Quake Lake down to Ennis is the classic water; Bear Trap Canyon for solitude (mind the rattlesnakes)."
+  },
+  {
+    "name": "Bighorn River",
+    "species": [
+      "trout"
+    ],
+    "state": "Montana",
+    "lat": 45.31,
+    "lon": -107.94,
+    "match": "bighorn",
+    "hook": "A tailwater below Yellowtail Dam holding one of the highest trout densities in the country.",
+    "hatches": "Fishes year-round: midges and baetis spring and fall, PMDs and black caddis mid-to-late summer, sowbugs every single day.",
+    "regs": "Standard Montana rules; the river corridor crosses the Crow Reservation — stay below the high-water mark.",
+    "stretches": "The upper 13 miles from Afterbay Dam; three access sites make DIY floats straightforward."
+  },
+  {
+    "name": "South Platte River",
+    "species": [
+      "trout"
+    ],
+    "state": "Colorado",
+    "lat": 39.25,
+    "lon": -105.23,
+    "match": "south\\s*platte",
+    "hook": "Colorado's classic technical tailwater — gin-clear water and educated rainbows that inspect every fly.",
+    "hatches": "Midges year-round, baetis spring and fall, tricos on summer mornings, PMDs June–July. Think small: 20s and smaller, 6X.",
+    "regs": "Cheesman Canyon is flies-only catch-and-release; the Deckers water is artificials-only with C&R on most of it.",
+    "stretches": "Cheesman Canyon via the Gill Trail for the experience; the town water at Deckers for easier access."
+  },
+  {
+    "name": "Frying Pan River",
+    "species": [
+      "trout"
+    ],
+    "state": "Colorado",
+    "lat": 39.37,
+    "lon": -106.82,
+    "match": "frying\\s*pan",
+    "hook": "Gold Medal tailwater below Ruedi Reservoir, famous for enormous trout fattened on mysis shrimp.",
+    "hatches": "Mysis patterns near the dam year-round; green drakes July–September (rare for a tailwater); BWOs in fall.",
+    "regs": "Flies and lures only, catch-and-release on the upper two miles below the dam.",
+    "stretches": "Fourteen miles of road-accessible water from the dam down to Basalt; the \"Toilet Bowl\" pool sits right below the outflow."
+  },
+  {
+    "name": "Green River",
+    "species": [
+      "trout"
+    ],
+    "state": "Utah",
+    "lat": 40.91,
+    "lon": -109.42,
+    "match": "green\\s*river",
+    "hook": "Gin-clear tailwater winding under red canyon walls below Flaming Gorge — you can watch every eat happen.",
+    "hatches": "The cicada fall in late May–June is the event of the year; BWOs in spring, terrestrials all summer.",
+    "regs": "Artificials-only with slot limits — verify current Utah rules before keeping anything.",
+    "stretches": "The A section (dam to Little Hole, 7 miles) has a trail the whole way; B section to Browns Park is quieter."
+  },
+  {
+    "name": "San Juan River",
+    "species": [
+      "trout"
+    ],
+    "state": "New Mexico",
+    "lat": 36.81,
+    "lon": -107.65,
+    "match": "san\\s*juan",
+    "hook": "A midge factory below Navajo Dam that grows 18-inch rainbows on size-24 flies.",
+    "hatches": "Midges every day of the year, BWOs fall through spring, annelid patterns after flow bumps.",
+    "regs": "The Quality Water below the dam is single barbless artificials with a one-fish limit — verify current rules.",
+    "stretches": "Texas Hole and the braids near the dam are famous for a reason; walk downstream for space."
+  },
+  {
+    "name": "Deschutes River",
+    "species": [
+      "trout",
+      "steelhead"
+    ],
+    "state": "Oregon",
+    "lat": 45.17,
+    "lon": -121.08,
+    "match": "deschutes",
+    "hook": "A big desert-canyon river with hard-fighting \"redside\" rainbows and a summer steelhead run.",
+    "hatches": "The salmonfly and golden stone hatch in May–June is legendary; caddis all summer; steelhead August–November.",
+    "regs": "No fishing from a floating device — you must anchor or beach and wade.",
+    "stretches": "The Maupin day water is the easy entry; Warm Springs to Trout Creek is the classic stonefly float."
+  },
+  {
+    "name": "White River",
+    "species": [
+      "trout"
+    ],
+    "state": "Arkansas",
+    "lat": 36.38,
+    "lon": -92.56,
+    "match": "white\\s*river",
+    "hook": "An Ozark tailwater churning out huge numbers of rainbows and true trophy brown trout.",
+    "hatches": "Year-round fishery: sowbugs and midges daily, streamer fishing on high water for the big browns, shad kills in late winter.",
+    "regs": "Catch-and-release and special-regulation zones below Bull Shoals Dam — check the current map.",
+    "stretches": "Bull Shoals Dam down to Cotter; wade at low generation, boat when they're running water."
+  },
+  {
+    "name": "Delaware River, West Branch",
+    "species": [
+      "trout"
+    ],
+    "state": "New York",
+    "lat": 42.01,
+    "lon": -75.38,
+    "match": "delaware",
+    "hook": "The Northeast's most technical dry-fly river — wild rainbows and browns that rise like they've read the books.",
+    "hatches": "Sulphurs late May–June evenings are prime; BWOs spring and fall, isonychia in summer. Everything depends on reservoir releases.",
+    "regs": "No-kill catch-and-release on much of the upper West Branch — verify the current boundaries.",
+    "stretches": "Deposit to Hale Eddy wades well at friendly flows; below Hancock it joins the main stem."
+  },
+  {
+    "name": "Farmington River",
+    "species": [
+      "trout"
+    ],
+    "state": "Connecticut",
+    "lat": 41.88,
+    "lon": -72.97,
+    "match": "farmington",
+    "hook": "New England's most consistent trout stream — bottom-release cold water keeps it fishing all summer.",
+    "hatches": "Hendricksons April–May, sulphurs in June, tricos and terrestrials late summer, BWOs in fall. Fishes year-round.",
+    "regs": "The permanent TMA around Riverton and People's State Forest is year-round catch-and-release.",
+    "stretches": "Riverton down through New Hartford is the heart of it."
+  },
+  {
+    "name": "Missouri River",
+    "species": [
+      "trout"
+    ],
+    "state": "Montana",
+    "lat": 46.78,
+    "lon": -111.7,
+    "match": "missouri\\s*river",
+    "hook": "A giant spring-creek-like tailwater below Holter Dam around Craig — huge wild rainbows and browns in astonishing numbers.",
+    "hatches": "BWOs and midges spring and fall, the famous PMD and caddis blizzards in June–July, tricos in late summer.",
+    "regs": "Standard Montana rules; the Craig-to-Cascade water is the classic float — verify current regs.",
+    "stretches": "Holter Dam to Cascade; wade Craig, or float the ledges and weed beds."
+  },
+  {
+    "name": "Yellowstone River",
+    "species": [
+      "trout"
+    ],
+    "state": "Montana",
+    "lat": 45.55,
+    "lon": -110.56,
+    "match": "yellowstone\\s*river",
+    "hook": "The longest undammed river in the lower 48 — cutthroat, rainbows and browns through Paradise Valley and the park.",
+    "hatches": "Mother's Day caddis before runoff, salmonflies and goldens in July, hoppers in August, BWOs in fall.",
+    "regs": "Yellowstone Park water needs a park permit and is often catch-and-release; verify seasons.",
+    "stretches": "Paradise Valley below Gardiner floats well; the park water above for cutthroat."
+  },
+  {
+    "name": "Henrys Fork",
+    "species": [
+      "trout"
+    ],
+    "state": "Idaho",
+    "lat": 44.15,
+    "lon": -111.37,
+    "match": "henry.?s?\\s*fork",
+    "hook": "The Railroad Ranch (Harriman) is the world's most famous — and hardest — dry-fly water for big, picky rainbows.",
+    "hatches": "Green drakes and PMDs in June, the legendary flav and brown drake hatches, tricos and callibaetis in summer.",
+    "regs": "The Ranch is flies-only, catch-and-release, no wading in places — check the current rules.",
+    "stretches": "Harriman State Park (the Ranch) for technical dries; Box Canyon for nymphing big fish."
+  },
+  {
+    "name": "Silver Creek",
+    "species": [
+      "trout"
+    ],
+    "state": "Idaho",
+    "lat": 43.32,
+    "lon": -114.12,
+    "match": "silver\\s*creek",
+    "hook": "A glassy spring creek near Sun Valley — a graduate school of dry-fly fishing over huge, wary rainbows and browns.",
+    "hatches": "Baetis, PMDs, the brown drake spectacle in June, tricos and callibaetis, then hoppers and mahogany duns in fall.",
+    "regs": "Nature Conservancy preserve water is flies-only, catch-and-release, barbless — verify.",
+    "stretches": "The Conservancy preserve and Kilpatrick Bridge; long leaders and fine tippet required."
+  },
+  {
+    "name": "Big Hole River",
+    "species": [
+      "trout"
+    ],
+    "state": "Montana",
+    "lat": 45.62,
+    "lon": -112.75,
+    "match": "big\\s*hole",
+    "hook": "A freestone gem — the last river with a native fluvial grayling, plus browns, rainbows and brookies.",
+    "hatches": "The salmonfly hatch in late June is the event; caddis, PMDs and hoppers through summer.",
+    "regs": "Drought closures and hoot-owl restrictions are common in summer — check before you go.",
+    "stretches": "Wise River to Melrose for the salmonfly float; the upper river for grayling and brookies."
+  },
+  {
+    "name": "North Platte River",
+    "species": [
+      "trout"
+    ],
+    "state": "Wyoming",
+    "lat": 42.32,
+    "lon": -106.85,
+    "match": "north\\s*platte",
+    "hook": "The Grey Reef and Miracle Mile tailwaters grow footballs — thick rainbows on a year-round trophy fishery.",
+    "hatches": "Midges and baetis year-round, leeches and eggs on high water, PMDs and tricos in summer.",
+    "regs": "Grey Reef has special artificial-only, slot and creel rules — verify the current regs.",
+    "stretches": "Grey Reef below Alcova for big rainbows; the Miracle Mile between reservoirs."
+  },
+  {
+    "name": "Roaring Fork River",
+    "species": [
+      "trout"
+    ],
+    "state": "Colorado",
+    "lat": 39.42,
+    "lon": -107.18,
+    "match": "roaring\\s*fork",
+    "hook": "A Gold Medal freestone tumbling from Aspen to Glenwood — browns, rainbows and cutthroat in bouldery pocket water.",
+    "hatches": "Blue-winged olives and caddis in spring, green drakes and PMDs in summer, big fall BWOs.",
+    "regs": "Gold Medal water with catch-and-release stretches — check current Colorado rules.",
+    "stretches": "Basalt to Carbondale for wade and float; the lower canyon to Glenwood for bigger water."
+  },
+  {
+    "name": "Colorado River",
+    "species": [
+      "trout"
+    ],
+    "state": "Colorado",
+    "lat": 39.94,
+    "lon": -106.4,
+    "match": "colorado\\s*river",
+    "hook": "The upper Colorado through the canyons above Kremmling and State Bridge — wild browns and rainbows in classic western water.",
+    "hatches": "BWOs and caddis in spring, PMDs and the famous green drake, hoppers in late summer.",
+    "regs": "Some Gold Medal / catch-and-release sections — verify the stretch you're on.",
+    "stretches": "Pumphouse to Radium is the classic float; Gore Canyon below is expert whitewater."
+  },
+  {
+    "name": "Arkansas River",
+    "species": [
+      "trout"
+    ],
+    "state": "Colorado",
+    "lat": 38.66,
+    "lon": -106.05,
+    "match": "arkansas\\s*river",
+    "hook": "A hundred-plus miles of Gold Medal brown trout water through the Rockies — one of the West's great wade fisheries.",
+    "hatches": "BWOs in spring, the storied Mother's Day caddis hatch, then PMDs, yellow sallies and hoppers.",
+    "regs": "Gold Medal from Leadville down; catch-and-release zones near Salida — verify.",
+    "stretches": "The Buena Vista and Salida stretches wade beautifully; Browns Canyon for float."
+  },
+  {
+    "name": "Provo River",
+    "species": [
+      "trout"
+    ],
+    "state": "Utah",
+    "lat": 40.5,
+    "lon": -111.48,
+    "match": "provo\\s*river",
+    "hook": "A brown-trout factory tailwater minutes from Salt Lake — the Middle Provo holds thousands of fish per mile.",
+    "hatches": "Blue-winged olives and midges year-round, PMDs and green drakes in summer, big fall streamer season.",
+    "regs": "Artificial-only, catch-and-release on much of the Middle and Lower — verify.",
+    "stretches": "The Middle Provo (Jordanelle to Deer Creek) for wading; the Lower for bigger browns."
+  },
+  {
+    "name": "Yakima River",
+    "species": [
+      "trout"
+    ],
+    "state": "Washington",
+    "lat": 47,
+    "lon": -120.72,
+    "match": "yakima\\s*river",
+    "hook": "Washington's only Blue Ribbon trout stream — a desert-canyon river of wild \"westslope\" cutthroat and rainbows.",
+    "hatches": "Skwalas kick off spring, then March browns, caddis, PMDs, and the fall October caddis.",
+    "regs": "Catch-and-release, selective gear rules on the upper river — verify current WDFW regs.",
+    "stretches": "The Farmlands and the Canyon (Cle Elum to Ellensburg) float well."
+  },
+  {
+    "name": "Deschutes River",
+    "species": [
+      "trout",
+      "steelhead"
+    ],
+    "state": "Oregon",
+    "lat": 44.76,
+    "lon": -121,
+    "match": "deschutes",
+    "hook": "A big desert-canyon river with hard-fighting \"redside\" rainbows and a summer steelhead run.",
+    "hatches": "The salmonfly and golden stone hatch in May–June is legendary; caddis all summer; steelhead August–November.",
+    "regs": "No fishing from a floating device — you must anchor or beach and wade.",
+    "stretches": "The Maupin day water is the easy entry; Warm Springs to Trout Creek is the classic stonefly float."
+  },
+  {
+    "name": "McCloud River",
+    "species": [
+      "trout"
+    ],
+    "state": "California",
+    "lat": 41.15,
+    "lon": -122.1,
+    "match": "mccloud",
+    "hook": "A mossy, spring-fed river below Mt. Shasta — the ancestral home of the McCloud rainbow, wild and beautiful.",
+    "hatches": "Caddis and PMDs through summer, October caddis in fall, plus a strong stonefly presence.",
+    "regs": "The Nature Conservancy preserve water is flies-only, catch-and-release, limited rods — verify.",
+    "stretches": "The Conservancy preserve downstream of Ah-Di-Na; wade the pocket water carefully."
+  },
+  {
+    "name": "Lower Sacramento River",
+    "species": [
+      "trout"
+    ],
+    "state": "California",
+    "lat": 40.52,
+    "lon": -122.29,
+    "match": "sacramento\\s*river",
+    "hook": "A big tailwater through Redding growing thick, hard-running wild rainbows on a year-round fishery.",
+    "hatches": "Caddis and BWOs, the famous \"bug\" fishing on the drift, plus egg patterns behind spawning salmon in fall.",
+    "regs": "Standard California trout rules; barbless in places — verify.",
+    "stretches": "Redding to Anderson is prime drift-boat water; the Posse Grounds for wade access."
+  },
+  {
+    "name": "Truckee River",
+    "species": [
+      "trout"
+    ],
+    "state": "California",
+    "lat": 39.32,
+    "lon": -120.18,
+    "match": "truckee\\s*river",
+    "hook": "A tough, rewarding freestone between Tahoe and Reno holding big, wild browns and rainbows.",
+    "hatches": "Baetis and midges, skwalas in spring, then PMDs, caddis and October caddis in fall.",
+    "regs": "Special-regulation and catch-and-release sections vary by state line — verify CA/NV rules.",
+    "stretches": "The California water above Truckee wades well; the trophy stretch toward the Nevada line for big browns."
+  },
+  {
+    "name": "Watauga River",
+    "species": [
+      "trout"
+    ],
+    "state": "Tennessee",
+    "lat": 36.38,
+    "lon": -82.13,
+    "match": "watauga",
+    "hook": "A Southern Appalachian tailwater below Wilbur Dam — dense wild browns and stocked rainbows in cold, clear water.",
+    "hatches": "Sulphurs and caddis in spring and summer, midges and BWOs year-round, terrestrials late summer.",
+    "regs": "Quality/trophy sections with gear limits — verify current TWRA rules and generation schedules.",
+    "stretches": "Below Wilbur Dam down toward Elizabethton; watch dam-release flows."
+  },
+  {
+    "name": "South Holston River",
+    "species": [
+      "trout"
+    ],
+    "state": "Tennessee",
+    "lat": 36.52,
+    "lon": -82.1,
+    "match": "south\\s*holston",
+    "hook": "One of the Southeast's best — a bug-factory tailwater famous for its all-day sulphur hatch and fat wild browns.",
+    "hatches": "Sulphurs virtually year-round, BWOs, midges, and a strong caddis presence.",
+    "regs": "Trophy trout regs with slot limits — verify TWRA rules and the dam generation schedule before wading.",
+    "stretches": "Below South Holston Dam to Bluff City; the weir pool and the flats."
+  },
+  {
+    "name": "Davidson River",
+    "species": [
+      "trout"
+    ],
+    "state": "North Carolina",
+    "lat": 35.28,
+    "lon": -82.72,
+    "match": "davidson",
+    "hook": "A gorgeous Pisgah Forest stream with famously educated, well-fed wild trout below the fish hatchery.",
+    "hatches": "BWOs and midges year-round, caddis and Light Cahills in spring, terrestrials in summer.",
+    "regs": "The hatchery section is catch-and-release, flies-only — verify current rules.",
+    "stretches": "The catch-and-release water around the hatchery; go small and fine."
+  },
+  {
+    "name": "Housatonic River",
+    "species": [
+      "trout",
+      "bass"
+    ],
+    "state": "Connecticut",
+    "lat": 41.8,
+    "lon": -73.37,
+    "match": "housatonic",
+    "hook": "A big western-Connecticut river with wild and holdover trout up top and excellent smallmouth in the warmer reaches.",
+    "hatches": "Hendricksons and the famous \"Hendrickson\" and tan caddis in spring, then sulphurs, isonychia, and fall BWOs.",
+    "regs": "The TMA (trout management area) has catch-and-release, artificial-only rules — verify.",
+    "stretches": "The Cornwall-to-Kent TMA for trout; the lower river for summer smallmouth."
+  },
+  {
+    "name": "Beaverkill River",
+    "species": [
+      "trout"
+    ],
+    "state": "New York",
+    "lat": 41.95,
+    "lon": -74.86,
+    "match": "beaverkill",
+    "hook": "The birthplace of American dry-fly fishing in the Catskills — hallowed pools and wild-plus-stocked browns.",
+    "hatches": "Hendricksons and Quill Gordons in spring, March browns, sulphurs, then tricos and isonychia in summer.",
+    "regs": "No-kill catch-and-release sections around Roscoe — verify current DEC rules.",
+    "stretches": "The famous no-kill water at Junction Pool in Roscoe and downstream."
+  },
+  {
+    "name": "Penns Creek",
+    "species": [
+      "trout"
+    ],
+    "state": "Pennsylvania",
+    "lat": 40.84,
+    "lon": -77.36,
+    "match": "penns\\s*creek",
+    "hook": "Central Pennsylvania's legendary limestone-influenced stream — big wild browns and the mythical green drake hatch.",
+    "hatches": "Grannoms in April, sulphurs in May, and the famous green drake \"coffin fly\" spectacle in late May–June.",
+    "regs": "Catch-and-release / all-tackle trophy sections vary — verify current PA rules.",
+    "stretches": "The Broadwater and the catch-and-release stretch below Coburn."
+  },
+  {
+    "name": "Gunpowder River",
+    "species": [
+      "trout"
+    ],
+    "state": "Maryland",
+    "lat": 39.49,
+    "lon": -76.58,
+    "match": "gunpowder",
+    "hook": "A cold tailwater below Prettyboy just north of Baltimore — thousands of wild browns in an intimate freestone setting.",
+    "hatches": "BWOs and midges year-round, Hendricksons and caddis in spring, sulphurs and tricos into summer.",
+    "regs": "Catch-and-release, artificial-only on the trophy water — verify current Maryland DNR rules.",
+    "stretches": "Below Prettyboy Dam through the Falls Road area; small flies, careful wading."
+  },
+  {
+    "name": "Gallatin River",
+    "species": [
+      "trout"
+    ],
+    "state": "Montana",
+    "lat": 45.29,
+    "lon": -111.17,
+    "match": "gallatin",
+    "hook": "A classic wade-fishing freestone (yes, the \"A River Runs Through It\" river) with willing rainbows, browns and cutthroat.",
+    "hatches": "Salmonflies and goldens in July, PMDs and caddis all summer, hoppers in August, fall BWOs.",
+    "regs": "No fishing from a boat on much of it — a wader's river. Verify Montana rules.",
+    "stretches": "The canyon between Big Sky and Gallatin Gateway is roadside pocket-water heaven."
+  },
+  {
+    "name": "Snake River",
+    "species": [
+      "trout"
+    ],
+    "state": "Wyoming",
+    "lat": 43.5,
+    "lon": -110.73,
+    "match": "snake\\s*river",
+    "hook": "Under the Tetons near Jackson — home of the beautiful, aggressive native fine-spotted Snake River cutthroat.",
+    "hatches": "PMDs and caddis in summer, the gray/green drakes, and the famous late-summer hopper and attractor dry fishing.",
+    "regs": "Cutthroat are largely catch-and-release; verify Wyoming seasons and the park boundaries.",
+    "stretches": "Float the classic stretches below Jackson Lake Dam through the canyon."
+  },
+  {
+    "name": "Blackfoot River",
+    "species": [
+      "trout"
+    ],
+    "state": "Montana",
+    "lat": 46.9,
+    "lon": -113.2,
+    "match": "blackfoot",
+    "hook": "A rugged, scenic freestone east of Missoula — wild trout in a wilderness feel, with a strong native cutthroat presence.",
+    "hatches": "Salmonflies in June, then PMDs, caddis, spruce moths and hoppers through summer.",
+    "regs": "Catch-and-release on cutthroat and bull trout; hoot-owl closures in hot spells — verify.",
+    "stretches": "The roadside water along Highway 200; float the canyon sections."
+  },
+  {
+    "name": "Bitterroot River",
+    "species": [
+      "trout"
+    ],
+    "state": "Montana",
+    "lat": 46.5,
+    "lon": -114.1,
+    "match": "bitterroot",
+    "hook": "A braided valley river south of Missoula famous for the earliest dry-fly action in the West — the skwala hatch.",
+    "hatches": "Skwala stoneflies in March–April, then March browns, PMDs, caddis, and green drakes.",
+    "regs": "Standard Montana rules with some closures — verify current regs.",
+    "stretches": "The West Fork and the main stem through the Bitterroot Valley."
+  },
+  {
+    "name": "Metolius River",
+    "species": [
+      "trout"
+    ],
+    "state": "Oregon",
+    "lat": 44.48,
+    "lon": -121.63,
+    "match": "metolius",
+    "hook": "A spring creek that erupts full-grown from the ground near Camp Sherman — crystalline water and famously selective redband trout and bull trout.",
+    "hatches": "Green drakes and caddis in spring/summer, BWOs, and technical midge fishing year-round.",
+    "regs": "Flies-only, catch-and-release; wild and demanding — verify ODFW rules.",
+    "stretches": "From the headwaters spring down past Camp Sherman; sight-fish the flats."
+  },
+  {
+    "name": "Grande Ronde River",
+    "species": [
+      "steelhead",
+      "trout"
+    ],
+    "state": "Oregon",
+    "lat": 45.87,
+    "lon": -117.5,
+    "match": "grande\\s*ronde",
+    "hook": "A remote canyon river straddling Oregon and Washington — one of the classic dry-line summer steelhead swings.",
+    "hatches": "Summer steelhead in fall; the trout fishing (redbands and bull trout) is strong in warmer months too.",
+    "regs": "Steelhead rules and wild-release requirements vary by state line — verify carefully.",
+    "stretches": "The lower canyon toward Troy for swinging flies in October."
+  },
+  {
+    "name": "Klamath River",
+    "species": [
+      "steelhead"
+    ],
+    "state": "California",
+    "lat": 41.52,
+    "lon": -123.5,
+    "match": "klamath",
+    "hook": "A big Northern California river with a storied \"half-pounder\" summer steelhead run — smaller, aggressive fish that eat swung flies.",
+    "hatches": "Steelhead from late summer into fall; caddis and October caddis bring them up.",
+    "regs": "Steelhead regulations and low-flow closures apply — verify current CDFW rules.",
+    "stretches": "The middle river around Happy Camp and the Salmon River confluence."
+  },
+  {
+    "name": "Owens River",
+    "species": [
+      "trout"
+    ],
+    "state": "California",
+    "lat": 37.48,
+    "lon": -118.6,
+    "match": "owens\\s*river",
+    "hook": "An Eastern Sierra gem below Mammoth — the Upper Owens holds big migratory rainbows and browns from Crowley Reservoir.",
+    "hatches": "BWOs and midges, caddis and PMDs in summer, plus big fall runs of Crowley fish.",
+    "regs": "Wild trout and special-regulation sections — verify CDFW rules.",
+    "stretches": "The Upper Owens above Crowley for migratory fish; the Wild Trout section in the gorge."
+  },
+  {
+    "name": "Green River",
+    "species": [
+      "trout"
+    ],
+    "state": "Wyoming",
+    "lat": 43.02,
+    "lon": -109.87,
+    "match": "green\\s*river.*wyoming|upper\\s*green",
+    "hook": "The upper Green in the Wind River country — high-desert freestone water with wild browns, rainbows and cutthroat.",
+    "hatches": "Salmonflies and goldens early summer, PMDs, tricos and hoppers later.",
+    "regs": "Standard Wyoming rules; some special sections — verify.",
+    "stretches": "Around Pinedale and Warren Bridge; float or wade the riffle-run water."
+  },
+  {
+    "name": "Watauga & Elk",
+    "species": [
+      "trout"
+    ],
+    "state": "North Carolina",
+    "lat": 36.22,
+    "lon": -81.68,
+    "match": "elk\\s*river",
+    "hook": "High-country wild-trout water in the North Carolina mountains — small, tumbling streams full of colorful brookies and browns.",
+    "hatches": "Quill Gordons and Blue Quills in early spring, then caddis, sulphurs and summer terrestrials.",
+    "regs": "Wild trout / catch-and-release sections vary — verify NCWRC rules.",
+    "stretches": "The headwater freestones around Banner Elk; high-stick the pockets."
+  },
+  {
+    "name": "Toccoa River",
+    "species": [
+      "trout"
+    ],
+    "state": "Georgia",
+    "lat": 34.87,
+    "lon": -84.2,
+    "match": "toccoa",
+    "hook": "North Georgia's premier tailwater below Blue Ridge Dam — dense stocked rainbows and wild browns in cold mountain water.",
+    "hatches": "Caddis and sulphurs in spring/summer, BWOs and midges cool months, terrestrials in late summer.",
+    "regs": "Standard Georgia trout rules; watch the dam generation schedule before wading.",
+    "stretches": "The tailwater below Blue Ridge Dam toward McCaysville."
+  },
+  {
+    "name": "South Holston & Clinch",
+    "species": [
+      "trout"
+    ],
+    "state": "Tennessee",
+    "lat": 36.2,
+    "lon": -83.77,
+    "match": "clinch\\s*river",
+    "hook": "A Tennessee tailwater below Norris Dam near Knoxville — trophy wild browns and rainbows in cold, clear water.",
+    "hatches": "Sulphurs in May–June, BWOs and midges year-round, and a famous fall run of big browns.",
+    "regs": "Trophy/slot regulations and generation schedules — verify TWRA rules before wading.",
+    "stretches": "Below Norris Dam through Miller's Island; fish the low-water windows."
+  },
+  {
+    "name": "Namekagon River",
+    "species": [
+      "trout",
+      "bass"
+    ],
+    "state": "Wisconsin",
+    "lat": 46.1,
+    "lon": -91.2,
+    "match": "namekagon",
+    "hook": "A classic Northwoods river — coldwater trout up top giving way to excellent smallmouth downstream, all in wild Wisconsin forest.",
+    "hatches": "Hendricksons and the famous Hex hatch on the trout water in June; smallmouth on top all summer below.",
+    "regs": "Trout regulations on the upper river; verify Wisconsin DNR rules.",
+    "stretches": "The upper river above Hayward for trout; the lower for smallmouth floats."
+  },
+  {
+    "name": "Root River",
+    "species": [
+      "trout"
+    ],
+    "state": "Minnesota",
+    "lat": 43.72,
+    "lon": -91.87,
+    "match": "root\\s*river",
+    "hook": "The heart of Minnesota's Driftless — spring-fed limestone streams winding through bluff country, thick with wild brown trout.",
+    "hatches": "BWOs and midges early, caddis and sulphurs in spring/summer, tricos and terrestrials late.",
+    "regs": "Special-regulation and catch-and-release stretches throughout the Driftless — verify.",
+    "stretches": "The South Branch and the many spring creeks around Lanesboro and Preston."
+  },
+  {
+    "name": "Norfork River",
+    "species": [
+      "trout"
+    ],
+    "state": "Arkansas",
+    "lat": 36.25,
+    "lon": -92.14,
+    "match": "norfork",
+    "hook": "A short, intense Ozark tailwater below Norfork Dam — huge trout in cold water, a trophy brown factory alongside the White.",
+    "hatches": "Sowbugs and midges every day, BWOs, and streamer fishing on high water for the big browns.",
+    "regs": "Catch-and-release and special-regulation zones below the dam — verify Arkansas rules.",
+    "stretches": "The few miles below Norfork Dam to the White River confluence."
+  },
+  {
+    "name": "Current River",
+    "species": [
+      "trout"
+    ],
+    "state": "Missouri",
+    "lat": 37.15,
+    "lon": -91.41,
+    "match": "current\\s*river",
+    "hook": "A spring-fed Ozark river of stunning clarity — the Montauk and Baptist Camp trout water plus wild smallmouth downstream.",
+    "hatches": "Midges and BWOs, caddis and sulphurs in spring/summer, scuds and cress bugs year-round.",
+    "regs": "Blue/red/white ribbon areas with different gear rules — verify Missouri Dept. of Conservation rules.",
+    "stretches": "The trophy trout stretch below Montauk State Park; the wild river for smallmouth."
+  },
+  {
+    "name": "Guadalupe River",
+    "species": [
+      "trout",
+      "bass"
+    ],
+    "state": "Texas",
+    "lat": 29.87,
+    "lon": -98.38,
+    "match": "guadalupe",
+    "hook": "The southernmost year-round trout tailwater in the US, below Canyon Lake in the Hill Country — a winter stocked fishery with holdovers.",
+    "hatches": "Midges and small mayflies in winter/spring; the river warms to a bass and Rio Grande cichlid fishery in summer.",
+    "regs": "Special-regulation trout zones below the dam — verify Texas Parks & Wildlife rules.",
+    "stretches": "The tailrace below Canyon Dam; fish the cool water November through spring."
+  }
+]
