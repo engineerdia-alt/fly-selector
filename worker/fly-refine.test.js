@@ -89,11 +89,14 @@ describe('CORS', () => {
     assert.ok(ALLOWED_ORIGINS.includes('https://www.flyfishinguniverse.com'));
     assert.ok(ALLOWED_ORIGINS.includes('https://engineerdia-alt.github.io'));
     assert.ok(ALLOWED_ORIGINS.includes('http://localhost:8791'));
+    assert.ok(ALLOWED_ORIGINS.includes('http://localhost:8081'));
+    assert.ok(ALLOWED_ORIGINS.includes('http://127.0.0.1:8081'));
   });
 
   it('echoes an allowlisted Origin', () => {
     const h = corsHeaders('https://flyfishinguniverse.com');
     assert.equal(h['Access-Control-Allow-Origin'], 'https://flyfishinguniverse.com');
+    assert.equal(corsHeaders('http://localhost:8081')['Access-Control-Allow-Origin'], 'http://localhost:8081');
   });
 
   it('falls back for unknown Origin so browsers block credentialed misuse', () => {
