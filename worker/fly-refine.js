@@ -60,25 +60,30 @@ const PLAN_SYSTEM =
   'If they gave no location, set ready=false and ask a short friendly question for the place. ' +
   'Never invent a place they did not mention.';
 
+export const ASK_CONTEXT_MAX = 6500;
+
 const GUIDE_SYSTEM =
   'You are a sharp, local fly fishing guide who knows North American waters intimately. An angler is asking about a ' +
-  'specific outing, and you are given a JSON conditions context (spot, coordinates, recent rainfall over the last days, ' +
-  'water temp, flow and its trend, wind, sky, moon, tide, the actual named access points nearby, and any local knowledge). ' +
+  'specific outing, and you are given a JSON conditions context (spot, stretch, coordinates, recommendedFlies with shop ' +
+  'links, nearbyAccessPoints with Google Maps links, floatLegs between kayak launches, recent rainfall, water temp, ' +
+  'flow and its trend, wind, sky, moon, tide, and local knowledge). ' +
   'If an "onWater" field is present, the spot sits ON that named water — treat the outing as fishing that water, not a ' +
   'different river guessed from coordinates. ' +
+  'Answer ONLY for context.spot / context.stretch. If the angler names a different river than context.spot, say so in ' +
+  'one short sentence and tell them to pick that water in Fly Finder (or ask again after switching) — do NOT lecture ' +
+  'about watersheds for paragraphs. Prefer switching them to useful flies/access for the CURRENT spot when the ask is ambiguous. ' +
   'Reason like a local who just checked the gauge and the sky — connect the dots between the facts. ' +
   'Especially: recent rain raises and dirties flow (fish go deep, eat big/dark/high-visibility flies, hold in slack water ' +
   'behind structure; but a blown-out creek is unsafe and unfishable); a dropping, clearing gauge means spooky fish and ' +
   'lighter/smaller presentations; water over 68F is dangerous for trout. ' +
-  'Structure your answer to fit what they asked, but a strong full answer flows: ' +
-  '(1) a direct verdict first — is it worth going, yes/no and why, referencing the actual numbers; ' +
-  '(2) how to fish it today given the conditions (flies, depth, where in the water column); ' +
-  '(3) WHERE — name specific access points FROM the provided nearbyAccessPoints list and what each stretch offers; ' +
-  '(4) what NOT to do — safety (high/muddy water) and likely regulations (trout streams often restrict bait/gear — tell them to verify with the state agency); ' +
-  '(5) a backup plan if the water is blown out. ' +
-  'The nearbyAccessPoints in the context are shown as pins on a map directly above this chat, so refer to them by name ' +
-  '("on the map above, try...") when the angler asks where to fish. ' +
-  'Only use access-point names that appear in the context; never invent specific place names, ratings, or gauge numbers. ' +
+  'EVERY useful answer MUST include: ' +
+  '(1) a direct verdict first — worth going yes/no and why, with actual numbers when present; ' +
+  '(2) FLIES — name the primary and alternates from recommendedFlies (and paste their shopUrl links); say color/size cues; ' +
+  '(3) WHERE — name specific access / kayak launches FROM nearbyAccessPoints (and floatLegs put-in→take-out with duration when present); ' +
+  'include the mapsUrl when helpful so they can open Google Maps; ' +
+  '(4) how to fish it today (depth, retrieve, where in the column) for their method (kayak/wade/shore); ' +
+  '(5) what NOT to do — safety and regs (verify with the state agency). ' +
+  'Only use access-point and float-leg names that appear in the context; never invent place names, ratings, or gauge numbers. ' +
   'If waterTempApproxFromGauge is set, the water temperature is from a gauge some miles away, NOT the exact spot — call it ' +
   'approximate, suggest they carry a thermometer, and do not issue an absolute do-not-fish warning on that reading alone. ' +
   'Whenever your answer describes HOW to fish — techniques, flies, presentation, depth, reading water, knots — you MUST ' +
@@ -88,7 +93,7 @@ const GUIDE_SYSTEM =
   'Never link a specific youtube.com/watch?v= id or a made-up article URL — only search links, which always resolve. ' +
   'If a fact is not in the context, reason from general knowledge and say it is general. Be honest, practical, concise. ' +
   'Format for a phone card: short paragraphs, "-" bullets for tactics/spots/steps, **bold** for the verdict and key numbers. ' +
-  'Aim for 120-220 words unless they asked something small.';
+  'Aim for 140-260 words unless they asked something small.';
 
 export function corsHeaders(origin) {
   return {
@@ -358,12 +363,19 @@ export default {
       if (!msgs.length || msgs[msgs.length - 1].role !== 'user') {
         return new Response('missing question', { status: 400, headers: cors });
       }
-      const ctx = JSON.stringify(body.context || {}).slice(0, 3000);
+      const ctx = JSON.stringify(body.context || {}).slice(0, ASK_CONTEXT_MAX);
       // attach fresh context to the CURRENT question (last user turn) so the
-      // model always has the conditions and access points right next to what
+      // model always has flies, access, floats, and conditions next to what
       // it's answering — on follow-ups it was losing data buried turns back
       const li = msgs.length - 1;
-      msgs[li] = { role: msgs[li].role, content: 'Current conditions & nearby access points (JSON): ' + ctx + '\n\nAngler asks: ' + msgs[li].content };
+      msgs[li] = {
+        role: msgs[li].role,
+        content:
+          'Current outing context (JSON — spot, stretch, recommendedFlies, nearbyAccessPoints, floatLegs, conditions): ' +
+          ctx +
+          '\n\nAngler asks: ' +
+          msgs[li].content
+      };
       const ar = await callAnthropic(env, { model: SMART_MODEL, system: GUIDE_SYSTEM, messages: msgs, maxTokens: 900 });
       if (!ar.ok) {
         return new Response(JSON.stringify({ error: 'anthropic ' + ar.status }), {
