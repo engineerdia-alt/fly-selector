@@ -1,21 +1,36 @@
 // Fly Finder refinement worker.
 // Holds the Anthropic API key server-side. Routes:
-//   POST /      — which candidate species live in this exact stretch + a short read
-//   POST /ask   — conversational guide Q&A with follow-ups (message history)
-//   GET  /diag  — end-to-end test of the Anthropic call
+//   POST /        — which candidate species live in this exact stretch + a short read
+//   POST /plan    — free-form place/species intent extraction (Haiku)
+//   POST /ask     — conversational guide Q&A with follow-ups (Sonnet)
+//   POST /feedback — store angler feedback in KV
+//   GET  /fly-image — shop product photo proxy
+//   GET  /diag    — end-to-end test of the Anthropic call
+//   GET  /feedback[/view] — owner-only feedback dump
 // Static instructions live in cached system blocks (prompt caching kicks in
 // automatically once the prefix passes the model's minimum cacheable size).
 // Valid refine responses are edge-cached 7 days; errors are never cached.
+// /plan and /ask are rate-limited per client IP via the FEEDBACK KV binding.
 
-const ALLOWED_ORIGINS = [
+export const ALLOWED_ORIGINS = [
   'https://engineerdia-alt.github.io',
+  'https://flyfishinguniverse.com',
+  'https://www.flyfishinguniverse.com',
   'http://localhost:8791'
 ];
 
 // Sonnet for the reasoning-heavy guide + section reads; Haiku for cheap,
-// high-volume intent extraction
-const MODEL = 'claude-haiku-4-5-20251001';
-const SMART_MODEL = 'claude-sonnet-5';
+// high-volume intent extraction. Model IDs confirmed against Anthropic docs
+// (claude-sonnet-5 is the current Sonnet API id).
+export const MODEL = 'claude-haiku-4-5-20251001';
+export const SMART_MODEL = 'claude-sonnet-5';
+
+// Cost guardrails for uncached chat endpoints
+export const PLAN_DAILY_LIMIT = 40;
+export const ASK_DAILY_LIMIT = 30;
+export const PLAN_HISTORY_TURNS = 6;
+export const ASK_HISTORY_TURNS = 6;
+export const MSG_CONTENT_MAX = 600;
 
 const REFINE_SYSTEM =
   'You are a fly fishing expert with detailed knowledge of North American fisheries. ' +
@@ -75,6 +90,86 @@ const GUIDE_SYSTEM =
   'Format for a phone card: short paragraphs, "-" bullets for tactics/spots/steps, **bold** for the verdict and key numbers. ' +
   'Aim for 120-220 words unless they asked something small.';
 
+export function corsHeaders(origin) {
+  return {
+    'Access-Control-Allow-Origin': ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
+    'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type'
+  };
+}
+
+export function clientIp(request) {
+  return (
+    request.headers.get('CF-Connecting-IP') ||
+    request.headers.get('X-Forwarded-For')?.split(',')[0]?.trim() ||
+    'unknown'
+  );
+}
+
+export function rateLimitKey(route, ip, day) {
+  return 'rl:' + route + ':' + ip + ':' + day;
+}
+
+export function utcDay(d) {
+  return (d || new Date()).toISOString().slice(0, 10);
+}
+
+/** Returns { ok:true } or { ok:false, status, body } when over the daily cap. */
+export async function checkRateLimit(env, request, route, limit) {
+  if (!env.FEEDBACK || !limit) return { ok: true };
+  const ip = clientIp(request);
+  const key = rateLimitKey(route, ip, utcDay());
+  const raw = await env.FEEDBACK.get(key);
+  const count = raw ? parseInt(raw, 10) || 0 : 0;
+  if (count >= limit) {
+    return {
+      ok: false,
+      status: 429,
+      body: JSON.stringify({
+        error: 'rate_limit',
+        message: 'Daily limit reached for this feature. Try again tomorrow, or use search / the wizard.'
+      })
+    };
+  }
+  // expire mid-next-UTC-day so the key does not linger forever
+  await env.FEEDBACK.put(key, String(count + 1), { expirationTtl: 60 * 60 * 36 });
+  return { ok: true };
+}
+
+export function normalizeChatMessages(messages, maxTurns) {
+  const turns = maxTurns || PLAN_HISTORY_TURNS;
+  return (Array.isArray(messages) ? messages : [])
+    .slice(-turns)
+    .map(function (m) {
+      return {
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: String(m.content || '').slice(0, MSG_CONTENT_MAX)
+      };
+    })
+    .filter(function (m) { return m.content; });
+}
+
+export function parseJsonObject(text) {
+  const match = String(text || '').match(/\{[\s\S]*\}/);
+  if (!match) return null;
+  try { return JSON.parse(match[0]); } catch (e) { return null; }
+}
+
+export function textOf(r) {
+  // Belt-and-suspenders: even with thinking disabled, don't assume the
+  // answer is content[0] — concatenate every text block in order. This is
+  // what actually broke follow-up questions in the Ask chat: Sonnet 5's
+  // adaptive thinking put a `thinking` block (no `text` field) at
+  // content[0], so grabbing content[0].text returned undefined and the
+  // app showed "No answer came back" even though Claude had answered.
+  const blocks = (r.body.content || []).filter(function (b) { return b.type === 'text' && b.text; });
+  return blocks.map(function (b) { return b.text; }).join('\n\n');
+}
+
+export function refineCacheKeyParts(name, state, lat, lon, water, onWater) {
+  return [name, state || '', Math.round(lat * 20) / 20, Math.round(lon * 20) / 20, water || '', onWater || ''].join('|');
+}
+
 async function callAnthropic(env, opts) {
   const payload = {
     model: opts.model || MODEL,
@@ -104,25 +199,10 @@ async function callAnthropic(env, opts) {
   return { status: resp.status, ok: resp.ok, body };
 }
 
-function textOf(r) {
-  // Belt-and-suspenders: even with thinking disabled, don't assume the
-  // answer is content[0] — concatenate every text block in order. This is
-  // what actually broke follow-up questions in the Ask chat: Sonnet 5's
-  // adaptive thinking put a `thinking` block (no `text` field) at
-  // content[0], so grabbing content[0].text returned undefined and the
-  // app showed "No answer came back" even though Claude had answered.
-  const blocks = (r.body.content || []).filter(function (b) { return b.type === 'text' && b.text; });
-  return blocks.map(function (b) { return b.text; }).join('\n\n');
-}
-
 export default {
   async fetch(request, env) {
     const origin = request.headers.get('Origin') || '';
-    const cors = {
-      'Access-Control-Allow-Origin': ALLOWED_ORIGINS.includes(origin) ? origin : ALLOWED_ORIGINS[0],
-      'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type'
-    };
+    const cors = corsHeaders(origin);
     if (request.method === 'OPTIONS') return new Response(null, { headers: cors });
 
     const url = new URL(request.url);
@@ -235,13 +315,14 @@ export default {
     }
 
     if (url.pathname === '/plan') {
-      let msgs = Array.isArray(body.messages) ? body.messages : [];
-      msgs = msgs.slice(-8).map(function (m) {
-        return {
-          role: m.role === 'assistant' ? 'assistant' : 'user',
-          content: String(m.content || '').slice(0, 600)
-        };
-      }).filter(function (m) { return m.content; });
+      const rl = await checkRateLimit(env, request, 'plan', PLAN_DAILY_LIMIT);
+      if (!rl.ok) {
+        return new Response(rl.body, {
+          status: rl.status,
+          headers: { ...cors, 'Content-Type': 'application/json', 'Retry-After': '86400' }
+        });
+      }
+      const msgs = normalizeChatMessages(body.messages, PLAN_HISTORY_TURNS);
       if (!msgs.length || msgs[msgs.length - 1].role !== 'user') {
         return new Response('missing message', { status: 400, headers: cors });
       }
@@ -251,10 +332,7 @@ export default {
           status: 502, headers: { ...cors, 'Content-Type': 'application/json' }
         });
       }
-      const ptext = textOf(pr);
-      const pmatch = ptext.match(/\{[\s\S]*\}/);
-      let plan = null;
-      if (pmatch) { try { plan = JSON.parse(pmatch[0]); } catch (e) { plan = null; } }
+      const plan = parseJsonObject(textOf(pr));
       if (!plan || typeof plan.reply !== 'string') {
         return new Response(JSON.stringify({ reply: 'Tell me a river, lake, or town and what you\'re after.', ready: false }), {
           headers: { ...cors, 'Content-Type': 'application/json' }
@@ -266,15 +344,17 @@ export default {
     }
 
     if (url.pathname === '/ask') {
+      const rl = await checkRateLimit(env, request, 'ask', ASK_DAILY_LIMIT);
+      if (!rl.ok) {
+        return new Response(rl.body, {
+          status: rl.status,
+          headers: { ...cors, 'Content-Type': 'application/json', 'Retry-After': '86400' }
+        });
+      }
       let msgs = Array.isArray(body.messages)
         ? body.messages
         : (body.question ? [{ role: 'user', content: body.question }] : []);
-      msgs = msgs.slice(-8).map(function (m) {
-        return {
-          role: m.role === 'assistant' ? 'assistant' : 'user',
-          content: String(m.content || '').slice(0, 600)
-        };
-      }).filter(function (m) { return m.content; });
+      msgs = normalizeChatMessages(msgs, ASK_HISTORY_TURNS);
       if (!msgs.length || msgs[msgs.length - 1].role !== 'user') {
         return new Response('missing question', { status: 400, headers: cors });
       }
@@ -302,7 +382,7 @@ export default {
 
     const cache = caches.default;
     const cacheKey = new Request('https://cache.fly-finder.internal/v4/' + encodeURIComponent(
-      [name, state || '', Math.round(lat * 20) / 20, Math.round(lon * 20) / 20, water || '', onWater || ''].join('|')
+      refineCacheKeyParts(name, state, lat, lon, water, onWater)
     ));
     const hit = await cache.match(cacheKey);
     if (hit) {
@@ -324,12 +404,7 @@ export default {
       });
     }
 
-    const text = textOf(r);
-    const jsonMatch = text.match(/\{[\s\S]*\}/);
-    let parsed = null;
-    if (jsonMatch) {
-      try { parsed = JSON.parse(jsonMatch[0]); } catch (e) { parsed = null; }
-    }
+    const parsed = parseJsonObject(textOf(r));
     // never cache an unusable answer — a bad response would stick for a week
     if (!parsed || !Array.isArray(parsed.species)) {
       return new Response(JSON.stringify({ error: 'unparseable model output' }), {
