@@ -1,0 +1,8 @@
+{
+  "name": "fly-selector",
+  "private": true,
+  "scripts": {
+    "test": "node --test stretch.test.js",
+    "lint:ci": "node --check stretch.js && node --check stretch.test.js && npm test"
+  }
+}
