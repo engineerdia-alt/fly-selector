@@ -261,7 +261,8 @@ describe('handler routes', () => {
       const payload = JSON.parse(init.body);
       models.push(payload.model);
       const last = payload.messages[payload.messages.length - 1].content;
-      assert.match(last, /Current conditions/);
+      assert.match(last, /Current outing context/);
+      assert.match(last, /recommendedFlies/);
       assert.match(last, /Angler asks: worth going/);
       assert.match(last, /Huron River/);
       return {

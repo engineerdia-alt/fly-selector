@@ -70,4 +70,18 @@ describe('reachesForNotes', () => {
     const picked = pickDefaultReach(reachesForNotes(notes), 'bass');
     assert.equal(picked.id, 'middle');
   });
+
+  it('Huron River bass defaults to Hudson Mills float, not Proud Lake trout', () => {
+    const notes = {
+      reaches: [
+        { id: 'proud', label: 'Upper / Proud Lake–Milford', species: ['trout'] },
+        { id: 'hudson', label: 'Hudson Mills to Delhi', species: ['bass', 'pike', 'panfish', 'carp'] },
+        { id: 'flatrock', label: 'Flat Rock to South Rockwood', species: ['bass', 'pike', 'panfish', 'carp'] }
+      ]
+    };
+    const picked = pickDefaultReach(reachesForNotes(notes), 'bass');
+    assert.equal(picked.id, 'hudson');
+    const bass = filterReachesForSpecies(reachesForNotes(notes), 'bass');
+    assert.ok(bass.every((r) => r.id !== 'proud'));
+  });
 });

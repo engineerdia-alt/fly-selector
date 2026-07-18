@@ -2,7 +2,7 @@
   "name": "fly-selector",
   "private": true,
   "scripts": {
-    "test": "node --test stretch.test.js",
-    "lint:ci": "node --check stretch.js && node --check stretch.test.js && npm test"
+    "test": "node --test stretch.test.js float.test.js",
+    "lint:ci": "node --check stretch.js && node --check stretch.test.js && node --check float.js && node --check float.test.js && npm test"
   }
 }

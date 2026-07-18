@@ -510,20 +510,43 @@
     text-transform:uppercase;
     color:var(--brass-dark);
     cursor:pointer;
-    padding:14px 18px;
+    padding:14px 28px 14px 18px;
     list-style:none;
-    display:flex;
-    align-items:center;
-    justify-content:space-between;
-    gap:12px;
+    display:block;
+    position:relative;
+    user-select:none;
+    -webkit-user-select:none;
   }
   .ff-acc-sum::-webkit-details-marker{display:none;}
-  .ff-acc-sum::after{content:'▾'; color:var(--ink-soft); font-size:14px;}
+  .ff-acc-sum::marker{content:'';}
+  .ff-acc-sum::after{
+    content:'▾';
+    color:var(--ink-soft);
+    font-size:14px;
+    position:absolute;
+    right:16px;
+    top:50%;
+    transform:translateY(-50%);
+    pointer-events:none;
+  }
   .ff-acc:not([open]) .ff-acc-sum::after{content:'▸';}
   .ff-acc-body{padding:0 18px 16px;}
   .ff-acc-body .ff-info-card,
   .ff-acc-body .ff-flybox{margin:0;border:none;box-shadow:none;padding:0;background:transparent;}
   .ff-acc-body .ff-ask-title{display:none;}
+  .ff-float-leg{margin:0 0 12px;padding:0 0 12px;border-bottom:1px solid var(--parchment-dim);}
+  .ff-float-leg:last-child{border-bottom:none;margin-bottom:0;padding-bottom:0;}
+  .ff-float-actions{display:flex;flex-wrap:wrap;gap:8px;margin-top:6px;}
+  .ff-ask-quick{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px;}
+  .ff-ask-chip{
+    font-family:'IBM Plex Mono',monospace;font-size:11px;
+    border:1px solid var(--parchment-dim);background:var(--parchment);
+    color:var(--ink);border-radius:999px;padding:6px 10px;cursor:pointer;
+  }
+  .ff-ask-chip:hover{border-color:var(--brass);}
+  .ff-ask-pins{margin:0 0 12px;padding:10px 12px;background:rgba(15,50,44,0.04);border-radius:8px;}
+  .ff-ask-pins p{margin:0 0 6px;font-size:13px;line-height:1.4;}
+  .ff-ask-pins p:last-child{margin-bottom:0;}
 
   .ff-card-head .ff-card-fly,.ff-card-head .ff-card-color{margin:0;}
   .ff-card-fly{
@@ -1184,13 +1207,15 @@
 </div>
 
 <script src="stretch.js"></script>
+<script src="float.js"></script>
 <script>
 (function(){
-  var state = {location:null, notes:null, stretch:null, aiRefine:null, recentWeather:null, gauge:null, tide:null, bestWindow:null, access:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
+  var state = {location:null, notes:null, stretch:null, aiRefine:null, recentWeather:null, gauge:null, tide:null, bestWindow:null, access:null, floatLegs:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
   var currentStep = 0;
   var resultMap = null;
   var lastRec = null;
   var autoAdvancingConditions = false;
+  var accordionOpenState = {};
 
   var speciesInfo = {
     trout:     {label:'Trout', hint:'stream or stocked', cold:true},
@@ -1410,24 +1435,31 @@
         document.querySelectorAll('.ff-opt[data-field="stretch"]').forEach(function(b){
           b.classList.toggle('selected', b === btn);
         });
-        setTimeout(function(){ goToStep(4); }, 150);
+        setTimeout(afterStretchPicked, 150);
       });
       wrap.appendChild(btn);
     });
   }
 
+  function afterStretchPicked(){
+    if(state.method) enterConditionsStep();
+    else goToStep(4);
+  }
+
   function proceedAfterSpecies(){
-    state.stretch = null;
     var list = stretchChoices();
     if(!list.length){
-      goToStep(4);
+      state.stretch = null;
+      afterStretchPicked();
       return;
     }
     // Smart default: pick the best reach for this species, show it selected
-    state.stretch = window.FFStretch.pickDefaultReach(
-      window.FFStretch.reachesForNotes(state.notes),
-      state.species
-    );
+    if(!state.stretch || !list.some(function(r){ return r.id === state.stretch.id; })){
+      state.stretch = window.FFStretch.pickDefaultReach(
+        window.FFStretch.reachesForNotes(state.notes),
+        state.species
+      );
+    }
     renderStretchOptions();
     if(state.stretch){
       var selected = document.querySelector('.ff-opt[data-field="stretch"][data-value="' + state.stretch.id + '"]');
@@ -1764,12 +1796,23 @@
   function overpassAccess(q, lat, lon, requireName){
     return overpassFetch(q)
       .then(function(data){
-        var kinds = {slipway:'Boat / canoe launch', fishing:'Fishing access', park:'Park / river access', camp_site:'Campground'};
         var seen = {};
         var spots = [];
         (data.elements || []).forEach(function(e){
           var t = e.tags || {};
-          var kind = kinds[t.leisure] || kinds[t.tourism];
+          var kind = null;
+          if(t.leisure === 'slipway' || t.canoe === 'put_in' || t.canoe === 'put_in;egress' ||
+             t.whitewater === 'put_in' || t.whitewater === 'egress' || /canoe|kayak/i.test(t.sport || '')){
+            kind = 'Kayak / canoe launch';
+          } else if(t.leisure === 'fishing'){
+            kind = 'Fishing access';
+          } else if(t.leisure === 'park'){
+            kind = 'Park / river access';
+          } else if(t.tourism === 'camp_site'){
+            kind = 'Campground';
+          } else if(t.boat === 'yes' && t.name){
+            kind = 'Boat access';
+          }
           if(!kind) return;
           if(requireName && !t.name) return;
           var elat = e.lat != null ? e.lat : (e.center && e.center.lat);
@@ -1778,10 +1821,19 @@
           var key = t.name ? t.name.toLowerCase() : (elat.toFixed(3) + ',' + elon.toFixed(3));
           if(seen[key]) return;
           seen[key] = true;
-          spots.push({name: t.name || null, kind: kind, lat: elat, lon: elon, dist: haversineMi(lat, lon, elat, elon)});
+          spots.push({
+            name: t.name || null,
+            kind: kind,
+            lat: elat,
+            lon: elon,
+            dist: haversineMi(lat, lon, elat, elon),
+            mapsUrl: 'https://www.google.com/maps/?q=' + elat + ',' + elon
+          });
         });
         spots.sort(function(a, b){
-          return (a.name ? 0 : 1) - (b.name ? 0 : 1) || a.dist - b.dist;
+          var aLaunch = /launch|kayak|canoe|boat/i.test(a.kind) ? 0 : 1;
+          var bLaunch = /launch|kayak|canoe|boat/i.test(b.kind) ? 0 : 1;
+          return aLaunch - bLaunch || (a.name ? 0 : 1) - (b.name ? 0 : 1) || a.dist - b.dist;
         });
         return spots;
       });
@@ -1790,27 +1842,39 @@
   function fetchAccess(lat, lon){
     state.access = null;
     state.accessAlong = false;
-    var pointQ = '[out:json][timeout:20];(nwr["leisure"="slipway"](around:8000,' + lat + ',' + lon + ');' +
-                 'nwr["leisure"="fishing"](around:8000,' + lat + ',' + lon + '););out center tags 40;';
+    state.floatLegs = null;
+    var pointQ = '[out:json][timeout:20];(' +
+                 'nwr["leisure"="slipway"](around:12000,' + lat + ',' + lon + ');' +
+                 'nwr["leisure"="fishing"](around:12000,' + lat + ',' + lon + ');' +
+                 'nwr["canoe"="put_in"](around:12000,' + lat + ',' + lon + ');' +
+                 'nwr["whitewater"="put_in"](around:12000,' + lat + ',' + lon + ');' +
+                 'nwr["whitewater"="egress"](around:12000,' + lat + ',' + lon + ');' +
+                 ');out center tags 60;';
     var name = (state.location && state.location.name) || '';
     var movingWord = /\b(?:river|creek|stream|brook|branch|fork)\b/i;
     // "Au Sable River Access" -> "Au Sable": the distinctive part before the water word
     var stem = name.split(movingWord)[0].replace(/[.*+?^${}()|[\]\\"']/g, ' ').replace(/\s+/g, ' ').trim();
     var done = function(spots){
       if(spots && spots.length){
-        state.access = spots.slice(0, 6);
+        state.access = spots.slice(0, 12);
+        if(window.FFFloat){
+          state.floatLegs = window.FFFloat.buildFloatLegs(state.access, 6);
+        }
         refreshResult();
       }
     };
     if(movingWord.test(name) && stem){
       // follow the river itself: access points within 400m of any matching
-      // waterway segment inside 20km, not just a circle around this spot
+      // waterway segment inside 25km, not just a circle around this spot
       var corridorQ = '[out:json][timeout:25];' +
-        'way["waterway"~"river|stream"]["name"~"' + stem + '",i](around:20000,' + lat + ',' + lon + ')->.riv;' +
-        '(nwr["leisure"="slipway"](around.riv:400);' +
-        'nwr["leisure"="fishing"](around.riv:400);' +
+        'way["waterway"~"river|stream"]["name"~"' + stem + '",i](around:25000,' + lat + ',' + lon + ')->.riv;' +
+        '(nwr["leisure"="slipway"](around.riv:500);' +
+        'nwr["leisure"="fishing"](around.riv:500);' +
+        'nwr["canoe"="put_in"](around.riv:500);' +
+        'nwr["whitewater"="put_in"](around.riv:500);' +
+        'nwr["whitewater"="egress"](around.riv:500);' +
         'nwr["leisure"="park"](around.riv:400);' +
-        'nwr["tourism"="camp_site"](around.riv:400););out center tags 60;';
+        'nwr["tourism"="camp_site"](around.riv:400););out center tags 80;';
       overpassAccess(corridorQ, lat, lon, true).then(function(spots){
         if(spots.length){
           state.accessAlong = true;
@@ -1872,7 +1936,13 @@
      hook:'Metro Detroit\'s home water and one of the best smallmouth float fisheries in the Midwest, with a spring trout section up top.',
      hatches:'Smallmouth from late April through October — topwater in summer low light. Carp on the impoundment flats in summer.',
      regs:'The trout water below the Proud Lake dam has special early-season rules; the rest is standard warm-water regs.',
-     stretches:'Proud Lake to Milford for April browns; Hudson Mills to Delhi for smallmouth; below Belleville and Flat Rock dams on the lower river.'},
+     stretches:'Proud Lake to Milford for April browns; Hudson Mills to Delhi for smallmouth; below Belleville and Flat Rock dams on the lower river.',
+     reaches:[
+       {id:'proud', label:'Upper / Proud Lake–Milford', hint:'spring trout water', species:['trout'], blurb:'Proud Lake to Milford — cooler trout focus early season; verify special regs below the dam.', lat:42.460, lon:-83.660},
+       {id:'hudson', label:'Hudson Mills to Delhi', hint:'classic smallmouth float', species:['bass','pike','panfish','carp'], blurb:'Hudson Mills Metropark down through Delhi — the classic Huron smallmouth float.', lat:42.380, lon:-83.900},
+       {id:'belleville', label:'Belleville Lake stretch', hint:'impoundment bass & carp', species:['bass','pike','panfish','carp'], blurb:'Around Belleville Lake / dam — warmer impoundment water for bass, pike, and carp.', lat:42.210, lon:-83.490},
+       {id:'flatrock', label:'Flat Rock to South Rockwood', hint:'lower river paddle', species:['bass','pike','panfish','carp'], blurb:'Lower Huron from Flat Rock Boat Launch toward South Rockwood — slow, warm paddle water near Lake Erie.', lat:42.096, lon:-83.292}
+     ]},
     {name:'Rogue River', species:['trout', 'steelhead', 'bass', 'pike', 'panfish'], state:'Michigan', lat:43.121, lon:-85.560, match:'rogue\\s*river',
      hook:'A tributary of the Grand near Rockford, north of Grand Rapids — a designated trout stream up top with a strong fall/spring steelhead run, and smallmouth in the warmer lower reaches.',
      hatches:'Hendricksons and sulphurs May–June, caddis and hoppers through summer on the trout water. Steelhead run in from the Grand in fall and again in spring; summer runs warm and pushes trout to the coolest, shaded stretches.',
@@ -2229,12 +2299,69 @@
     return hits.length ? hits : null;
   }
 
-  function findWaterNotes(name, stateName){
-    if(!name || !stateName) return null;
+  function normalizeStateName(s){
+    if(!s) return null;
+    var t = String(s).trim();
+    if(STATE_ABBR[t.toUpperCase()]) return STATE_ABBR[t.toUpperCase()];
+    return t;
+  }
+
+  function findWaterNotes(name, stateName, lat, lon){
+    if(!name) return null;
+    var st = normalizeStateName(stateName);
+    var hits = [];
     for(var i = 0; i < WATER_NOTES.length; i++){
-      if(WATER_NOTES[i].state === stateName && WATER_NOTES[i].re.test(name)){
-        return WATER_NOTES[i];
+      var n = WATER_NOTES[i];
+      if(!n.re.test(name)) continue;
+      if(st && n.state === st) return n;
+      hits.push(n);
+    }
+    if(!hits.length) return null;
+    if(hits.length === 1) return hits[0];
+    if(lat != null && lon != null){
+      hits.sort(function(a, b){
+        return haversineMi(lat, lon, a.lat, a.lon) - haversineMi(lat, lon, b.lat, b.lon);
+      });
+      return hits[0];
+    }
+    return st ? null : hits[0];
+  }
+
+  /** If the angler names another curated water in Ask, retarget the outing. */
+  function curatedWaterFromQuestion(q){
+    if(!q) return null;
+    var hits = [];
+    for(var i = 0; i < WATER_NOTES.length; i++){
+      var n = WATER_NOTES[i];
+      if(n.re.test(q)) hits.push(n);
+      else if(n.reaches){
+        for(var j = 0; j < n.reaches.length; j++){
+          var r = n.reaches[j];
+          var labelRe = new RegExp(r.label.replace(/[.*+?^${}()|[\]\\]/g, '\\$&').split(/\s+/).slice(0, 3).join('\\s+'), 'i');
+          if(r.id === 'flatrock' && /flat\s*rock|south\s*rockwood/i.test(q)) hits.push(n);
+          else if(labelRe.test(q)) hits.push(n);
+        }
       }
+    }
+    // de-dupe by name
+    var seen = {};
+    hits = hits.filter(function(h){ if(seen[h.name]) return false; seen[h.name] = true; return true; });
+    if(!hits.length) return null;
+    var cur = state.location && state.location.name;
+    if(cur){
+      var different = hits.filter(function(h){ return !h.re.test(cur) && h.name.toLowerCase() !== cur.toLowerCase(); });
+      if(different.length) return different[0];
+      return null; // same water — no retarget
+    }
+    return hits[0];
+  }
+
+  function stretchFromQuestion(notes, q){
+    if(!notes || !notes.reaches || !q) return null;
+    for(var i = 0; i < notes.reaches.length; i++){
+      var r = notes.reaches[i];
+      if(r.id === 'flatrock' && /flat\s*rock|south\s*rockwood/i.test(q)) return r;
+      if(r.label && q.toLowerCase().indexOf(r.label.toLowerCase().slice(0, 10)) !== -1) return r;
     }
     return null;
   }
@@ -2388,7 +2515,7 @@
           btn.innerHTML = '<span class="rn">' + name + '</span><span class="rd">' + label + (region ? ' \u00b7 ' + region : '') + '</span>';
           btn.addEventListener('click', function(){
             state.location = {name:name, region:region, state:r.state, lat:r.lat, lon:r.lon, country:r.country};
-            state.notes = findWaterNotes(name, r.state);
+            state.notes = findWaterNotes(name, r.state, r.lat, r.lon);
             status.textContent = 'Loading conditions for ' + name + '...';
             fetchWeather(r.lat, r.lon, document.getElementById('locateStatus')).then(function(){
               status.textContent = 'Set: ' + name;
@@ -2509,7 +2636,7 @@
       btn.innerHTML = tag + '<span class="rn">' + w.name + '</span><span class="rd">' + kindLabel + ' · ' + w.dist.toFixed(1) + ' mi from ' + label + '</span>';
       btn.addEventListener('click', function(){
         state.location = {name:w.name, region:[label, stateName].filter(Boolean).join(', '), state:stateName, lat:w.lat, lon:w.lon, country:country};
-        state.notes = w.notes || findWaterNotes(w.name, stateName);
+        state.notes = w.notes || findWaterNotes(w.name, stateName, w.lat, w.lon);
         status.textContent = 'Set: ' + w.name;
         fetchWeather(w.lat, w.lon, document.getElementById('locateStatus')).catch(function(){});
         if(country === 'United States'){
@@ -2646,7 +2773,8 @@
         return;
       }
       state.location = {name:name, region:region, state:r.state, lat:r.lat, lon:r.lon, country:r.country};
-      state.notes = findWaterNotes(name, r.state);
+      state.notes = findWaterNotes(name, r.state, r.lat, r.lon);
+      state.stretch = null;
       var wx = fetchWeather(r.lat, r.lon, document.getElementById('locateStatus'));
       if(r.country === 'United States') fetchGauge(r.lat, r.lon);
       fetchAccess(r.lat, r.lon);
@@ -2658,14 +2786,18 @@
         state.species = plan.species;
         var validMethods = {shore:1, wading:1, boat:1, kayak:1};
         state.method = validMethods[plan.method] ? plan.method : (water === 'river' ? 'wading' : 'shore');
-        statusEl.textContent = 'Pulling conditions and flies for ' + name + '…';
-        wx.then(function(){
-          statusEl.textContent = '';
-          if(state.temp && state.sky && state.windSpeed){
-            renderResult(); goToStep(6);
-            if(askIsQuestion) autoAskGuide(firstAsk);
-          } else { enterConditionsStep(); }
-        }).catch(function(){ statusEl.textContent = ''; enterConditionsStep(); });
+        statusEl.textContent = '';
+        // Always offer stretch when we have notes — don't skip the quiz
+        if(stretchChoices().length){
+          proceedAfterSpecies();
+        } else if(state.temp && state.sky && state.windSpeed){
+          renderResult(); goToStep(6);
+          if(askIsQuestion) autoAskGuide(firstAsk);
+        } else {
+          enterConditionsStep();
+        }
+        // weather may still be in flight — conditions step auto-advances when ready
+        wx.catch(function(){});
       } else {
         statusEl.textContent = '';
         goToStep(2); // everything set except species — let them pick
@@ -2766,7 +2898,7 @@
       } else if(field === 'method'){
         enterConditionsStep();
       } else if(field === 'stretch'){
-        goToStep(4);
+        afterStretchPicked();
       }
     }, 150);
   }
@@ -2874,7 +3006,7 @@
           )
         : null;
     }
-    goToStep(4);
+    afterStretchPicked();
   });
 
   document.getElementById('continueBtn').addEventListener('click', function(){
@@ -2888,9 +3020,10 @@
 
   document.getElementById('restartBtn').addEventListener('click', function(){
     saveChatHistory();
-    state = {location:null, notes:null, stretch:null, aiRefine:null, recentWeather:null, gauge:null, tide:null, bestWindow:null, access:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
+    state = {location:null, notes:null, stretch:null, aiRefine:null, recentWeather:null, gauge:null, tide:null, bestWindow:null, access:null, floatLegs:null, water:null, species:null, method:null, temp:null, sky:null, windSpeed:null, windDir:null};
     lastRec = null;
     autoAdvancingConditions = false;
+    accordionOpenState = {};
     transcript = [];
     document.querySelectorAll('.ff-opt, .ff-chip, .ff-dir').forEach(function(b){ b.classList.remove('selected'); });
     document.getElementById('locateStatus').textContent = '';
@@ -3468,14 +3601,16 @@
     return '<svg viewBox="0 0 28 28" xmlns="http://www.w3.org/2000/svg">' + (art[kind] || '') + '</svg>';
   }
 
-  // everything the guide needs to reason like a local: recent rain, flow
-  // trend, the real named access points, regs cues, and current conditions
+  // everything the guide needs to reason like a local: flies first, then
+  // access / floats, then rain, flow, regs, and current conditions
   function buildGuideContext(){
     var g = state.gauge || {};
     var loc = state.location || {};
     var rw = state.recentWeather;
+    var rec = lastRec || recommendFly();
     var ctx = {
       spot: loc.name,
+      stretch: state.stretch ? {id: state.stretch.id, label: state.stretch.label, blurb: state.stretch.blurb || ''} : null,
       onWater: loc.waterHint || null,
       region: loc.region,
       state: loc.state,
@@ -3483,6 +3618,16 @@
       water: state.water,
       species: state.species,
       method: state.method,
+      recommendedFlies: rec ? {
+        primary: rec.primary,
+        color: rec.color,
+        term: rec.term,
+        shopUrl: shopUrl(rec.term),
+        why: rec.reasoning,
+        alternates: (rec.alternates || []).slice(0, 3).map(function(a){
+          return {name: a.name, color: a.color, shopUrl: shopUrl(a.term)};
+        })
+      } : null,
       date: new Date().toLocaleDateString('en', {weekday:'long', month:'long', day:'numeric'}),
       airTemp: state.temp,
       sky: state.sky,
@@ -3504,9 +3649,33 @@
       ctx.rainTodayIn = rw.todayIn;
     }
     if(state.access && state.access.length){
-      ctx.nearbyAccessPoints = state.access.slice(0, 6).map(function(a){
-        return {name: a.name || ('unnamed ' + a.kind.toLowerCase()), kind: a.kind, milesAway: Math.round(a.dist * 10) / 10};
+      ctx.nearbyAccessPoints = state.access.slice(0, 8).map(function(a){
+        return {
+          name: a.name || ('unnamed ' + a.kind.toLowerCase()),
+          kind: a.kind,
+          milesAway: Math.round(a.dist * 10) / 10,
+          mapsUrl: a.mapsUrl || ('https://www.google.com/maps/?q=' + a.lat + ',' + a.lon)
+        };
       });
+    }
+    if(state.floatLegs && state.floatLegs.length){
+      ctx.floatLegs = state.floatLegs.slice(0, 5).map(function(leg){
+        return {
+          from: leg.from.name || leg.from.kind,
+          to: leg.to.name || leg.to.kind,
+          miles: leg.miles,
+          paddleTime: leg.durationLabel,
+          shuttleMapsUrl: leg.mapsDirUrl,
+          putInMapsUrl: leg.putInMapsUrl,
+          takeOutMapsUrl: leg.takeOutMapsUrl
+        };
+      });
+    }
+    if(window.FFFloat && loc.name){
+      ctx.kayakLaunchSearchMapsUrl = window.FFFloat.googleMapsKayakSearchUrl(loc.name, loc.state);
+      if(state.access && state.access.length){
+        ctx.allLaunchesMapsUrl = window.FFFloat.googleMapsMultiSearchUrl(state.access, loc.name);
+      }
     }
     if(state.notes){
       ctx.localKnowledge = {hatches: state.notes.hatches, regs: state.notes.regs, stretches: state.notes.stretches};
@@ -3544,8 +3713,12 @@
     var method = methodTip();
     var wind = windTip();
 
-    function acc(title, bodyHtml, open){
-      return '<details class="ff-acc"' + (open === false ? '' : ' open') + '>' +
+    function acc(title, bodyHtml, openDefault){
+      var id = 'acc-' + String(title).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+      var isOpen = Object.prototype.hasOwnProperty.call(accordionOpenState, id)
+        ? accordionOpenState[id]
+        : (openDefault === true);
+      return '<details class="ff-acc" data-acc-id="' + id + '"' + (isOpen ? ' open' : '') + '>' +
         '<summary class="ff-acc-sum">' + title + '</summary>' +
         '<div class="ff-acc-body">' + bodyHtml + '</div></details>';
     }
@@ -3591,7 +3764,7 @@
     if(state.aiRefine && state.aiRefine.read){
       var aiBody = mdLite(state.aiRefine.read) +
         (state.aiRefine.regs ? '<p class="ff-md-p"><strong>Regulations:</strong> ' + escapeHtml(state.aiRefine.regs) + '</p>' : '');
-      htmlOut += acc('This stretch (AI read — verify)', aiBody, true);
+      htmlOut += acc('This stretch (AI read — verify)', aiBody, false);
     }
 
     if((state.species === 'trout' || state.species === 'steelhead') && state.gauge && state.gauge.waterTempF != null && state.gauge.waterTempF >= 68){
@@ -3608,7 +3781,7 @@
         '<p class="ff-info-body"><strong>Timing:</strong> ' + n.hatches + '</p>' +
         '<p class="ff-info-body"><strong>Regulations:</strong> ' + n.regs + ' Always verify current rules with the state agency.</p>' +
         '<p class="ff-info-body"><strong>Where to focus:</strong> ' + (state.stretch && state.stretch.blurb ? escapeHtml(state.stretch.blurb) + ' ' : '') + n.stretches + '</p>';
-      htmlOut += acc('Local knowledge — ' + n.name, localBody, true);
+      htmlOut += acc('Local knowledge — ' + n.name, localBody, false);
     }
 
     if(state.water === 'ocean' && state.tide){
@@ -3663,9 +3836,30 @@
       var accessItems = '';
       state.access.forEach(function(a){
         var label = a.name || ('Unnamed ' + a.kind.toLowerCase());
-        accessItems += '<p class="ff-alt-item">' + label + ' — ' + a.kind + ', ' + a.dist.toFixed(1) + ' mi · <a href="https://www.google.com/maps?q=' + a.lat + ',' + a.lon + '" target="_blank" rel="noopener">map ↗</a></p>';
+        var maps = a.mapsUrl || ('https://www.google.com/maps/?q=' + a.lat + ',' + a.lon);
+        accessItems += '<p class="ff-alt-item">' + escapeHtml(label) + ' — ' + escapeHtml(a.kind) + ', ' + a.dist.toFixed(1) + ' mi · <a href="' + maps + '" target="_blank" rel="noopener">Google Maps ↗</a></p>';
       });
-      htmlOut += acc(state.accessAlong ? 'Access along the river' : 'Access points nearby', accessItems, true);
+      if(window.FFFloat && state.location){
+        accessItems += '<p class="ff-alt-item"><a href="' + window.FFFloat.googleMapsKayakSearchUrl(state.location.name, state.location.state) + '" target="_blank" rel="noopener">Search kayak launches on Google Maps ↗</a></p>';
+        accessItems += '<p class="ff-alt-item"><a href="' + window.FFFloat.googleMapsMultiSearchUrl(state.access, state.location.name) + '" target="_blank" rel="noopener">Open all launches as a Google Maps route ↗</a></p>';
+        accessItems += '<p class="ff-alt-item"><button class="ff-mini-btn" id="downloadKmlBtn" type="button">⤓ Download launches (KML)</button></p>';
+      }
+      htmlOut += acc(state.accessAlong ? 'Access &amp; kayak launches' : 'Access &amp; kayak launches nearby', accessItems, true);
+    }
+
+    if(state.floatLegs && state.floatLegs.length){
+      var floatHtml = '<p class="ff-info-body">Estimated paddle times at ~3 mph (calm water). Shuttle driving links open in Google Maps.</p>';
+      state.floatLegs.forEach(function(leg){
+        floatHtml += '<div class="ff-float-leg"><p class="ff-alt-item"><strong>' +
+          escapeHtml(leg.from.name || leg.from.kind) + ' → ' + escapeHtml(leg.to.name || leg.to.kind) +
+          '</strong> — ~' + leg.miles + ' mi · ' + escapeHtml(leg.durationLabel) + '</p>' +
+          '<div class="ff-float-actions">' +
+          '<a class="ff-mini-btn" href="' + leg.putInMapsUrl + '" target="_blank" rel="noopener">Put-in map</a>' +
+          '<a class="ff-mini-btn" href="' + leg.takeOutMapsUrl + '" target="_blank" rel="noopener">Take-out map</a>' +
+          '<a class="ff-mini-btn" href="' + leg.mapsDirUrl + '" target="_blank" rel="noopener">Shuttle drive</a>' +
+          '</div></div>';
+      });
+      htmlOut += acc('Kayak float plans', floatHtml, true);
     }
 
     if(state.location && window.L){
@@ -3698,8 +3892,28 @@
     }
 
     if(REFINE_URLS.length){
+      var askPins = '';
+      if(state.access && state.access.length){
+        askPins = '<div class="ff-ask-pins" id="askPins"><p><strong>Access for this outing</strong></p>';
+        state.access.slice(0, 5).forEach(function(a){
+          var label = a.name || a.kind;
+          var maps = a.mapsUrl || ('https://www.google.com/maps/?q=' + a.lat + ',' + a.lon);
+          askPins += '<p>' + escapeHtml(label) + ' · ' + a.dist.toFixed(1) + ' mi · <a href="' + maps + '" target="_blank" rel="noopener">Maps ↗</a></p>';
+        });
+        askPins += '</div>';
+      }
+      var flyCue = rec
+        ? '<p class="ff-ask-sub">Today\'s fly: <strong>' + escapeHtml(rec.primary) + '</strong> (' + escapeHtml(rec.color) + ') · <a href="' + shopUrl(rec.term) + '" target="_top">shop ↗</a></p>'
+        : '';
       htmlOut += acc('Ask the guide',
-        '<p class="ff-ask-sub">Chat about this spot — conditions, tactics, where to go, what to avoid. Ask follow-ups anytime.</p>' +
+        flyCue +
+        askPins +
+        '<p class="ff-ask-sub">Ask about this spot — flies, launches, float times, tactics. Naming another river switches the outing.</p>' +
+        '<div class="ff-ask-quick" id="askQuick">' +
+        '<button type="button" class="ff-ask-chip" data-ask="What flies should I fish right now, and where should I put in?">Flies + put-in</button>' +
+        '<button type="button" class="ff-ask-chip" data-ask="Best kayak float nearby with put-in, take-out, and paddle time?">Kayak float</button>' +
+        '<button type="button" class="ff-ask-chip" data-ask="Where are the access points and how should I fish them today?">Access points</button>' +
+        '</div>' +
         '<div id="askThread"></div>' +
         '<div class="ff-ask-row">' +
         '<textarea class="ff-ask-input" id="askInput" rows="1" placeholder="Ask anything about fishing here today…"></textarea>' +
@@ -3716,6 +3930,11 @@
       '</dl>', false);
 
     box.innerHTML = htmlOut;
+    box.querySelectorAll('details.ff-acc[data-acc-id]').forEach(function(d){
+      d.addEventListener('toggle', function(){
+        accordionOpenState[d.getAttribute('data-acc-id')] = d.open;
+      });
+    });
     setTimeout(renderMap, 60);
     attachResultActions(rec);
 
@@ -3842,10 +4061,91 @@
     })(0);
   }
 
+  function switchOutingToNotes(notes, stretchHint, statusEl){
+    if(!notes) return Promise.resolve(false);
+    var stretch = stretchHint || null;
+    if(stretch && !stretch.lat && notes.reaches){
+      for(var i = 0; i < notes.reaches.length; i++){
+        if(notes.reaches[i].id === stretch.id){ stretch = notes.reaches[i]; break; }
+      }
+    }
+    var lat = (stretch && stretch.lat != null) ? stretch.lat : notes.lat;
+    var lon = (stretch && stretch.lon != null) ? stretch.lon : notes.lon;
+    state.location = {
+      name: notes.name,
+      region: [notes.state, 'United States'].filter(Boolean).join(', '),
+      state: notes.state,
+      lat: lat,
+      lon: lon,
+      country: 'United States'
+    };
+    state.notes = notes;
+    state.stretch = stretch ? {
+      id: stretch.id,
+      label: stretch.label,
+      hint: stretch.hint || '',
+      species: stretch.species || null,
+      blurb: stretch.blurb || stretch.hint || stretch.label
+    } : null;
+    state.water = 'river';
+    state.gauge = null;
+    state.access = null;
+    state.floatLegs = null;
+    state.tide = null;
+    state.aiRefine = null;
+    state.recentWeather = null;
+    state.bestWindow = null;
+    state.askChat = [];
+    accordionOpenState = {};
+    if(statusEl) statusEl.textContent = 'Switching outing to ' + notes.name + (state.stretch ? ' · ' + state.stretch.label : '') + '…';
+    var jobs = [
+      fetchWeather(lat, lon, document.getElementById('locateStatus')).catch(function(){}),
+      new Promise(function(resolve){
+        fetchAccess(lat, lon);
+        // give Overpass a moment; Ask still works if access arrives late via refreshResult
+        setTimeout(resolve, 1200);
+      })
+    ];
+    if(notes.state) fetchGauge(lat, lon);
+    refineLocation('river');
+    return Promise.all(jobs).then(function(){
+      renderResult();
+      goToStep(6);
+      return true;
+    });
+  }
+
+  function maybeRetargetOuting(q, statusEl){
+    var notes = curatedWaterFromQuestion(q);
+    if(!notes && state.notes){
+      // Same river — still allow switching stretch (e.g. Flat Rock on Huron)
+      var sameStretch = stretchFromQuestion(state.notes, q);
+      if(sameStretch && (!state.stretch || state.stretch.id !== sameStretch.id)){
+        return switchOutingToNotes(state.notes, sameStretch, statusEl);
+      }
+      return Promise.resolve(false);
+    }
+    if(!notes) return Promise.resolve(false);
+    var stretch = stretchFromQuestion(notes, q);
+    return switchOutingToNotes(notes, stretch, statusEl);
+  }
+
   function attachResultActions(rec){
     loadRealFly(rec.term);
     var saveBtn = document.getElementById('saveSpotBtn');
     var logBtn = document.getElementById('logTripBtn');
+    var kmlBtn = document.getElementById('downloadKmlBtn');
+    if(kmlBtn && window.FFFloat && state.access){
+      kmlBtn.addEventListener('click', function(){
+        var kml = window.FFFloat.accessPointsKml(state.access, (state.location && state.location.name) || 'launches');
+        var blob = new Blob([kml], {type: 'application/vnd.google-earth.kml+xml'});
+        var a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = ((state.location && state.location.name) || 'fly-finder').replace(/\s+/g, '-').toLowerCase() + '-launches.kml';
+        a.click();
+        setTimeout(function(){ URL.revokeObjectURL(a.href); }, 1000);
+      });
+    }
     if(!saveBtn) return;
     saveBtn.addEventListener('click', function(){
       var spots = loadList('ffSpots');
@@ -3866,6 +4166,7 @@
       if(!state.askChat) state.askChat = [];
       var renderAskThread = function(){
         var thread = document.getElementById('askThread');
+        if(!thread) return;
         var h = '';
         state.askChat.forEach(function(m){
           if(m.role === 'user'){
@@ -3880,22 +4181,22 @@
       renderAskThread();
       var input = document.getElementById('askInput');
       var statusEl = document.getElementById('askStatus');
-      function submitAsk(){
-        var q = input.value.trim();
-        if(!q || askBtn.disabled) return;
+      function postAsk(q){
+        var liveAskBtn = document.getElementById('askBtn');
+        var liveInput = document.getElementById('askInput');
+        var liveStatus = document.getElementById('askStatus');
+        if(!liveAskBtn || !liveStatus) return;
         state.askChat.push({role: 'user', content: q});
         renderAskThread();
-        input.value = '';
-        input.style.height = '';
-        statusEl.textContent = 'The guide is thinking…';
-        askBtn.disabled = true;
+        liveStatus.textContent = 'The guide is thinking…';
+        liveAskBtn.disabled = true;
         var ctx = buildGuideContext();
         (function attempt(i){
           if(i >= REFINE_URLS.length){
-            statusEl.textContent = 'Couldn\'t reach the guide — try again in a minute.';
-            state.askChat.pop(); // let them resend the same question
+            liveStatus.textContent = 'Couldn\'t reach the guide — try again in a minute.';
+            state.askChat.pop();
             renderAskThread();
-            askBtn.disabled = false;
+            liveAskBtn.disabled = false;
             return;
           }
           fetch(REFINE_URLS[i] + '/ask', {
@@ -3907,13 +4208,36 @@
             return r.json();
           }).then(function(d){
             state.askChat.push({role: 'assistant', content: d.answer || 'No answer came back — try rewording.'});
+            // re-bind thread after possible retarget re-render
             renderAskThread();
-            statusEl.textContent = '';
-            askBtn.disabled = false;
-            input.focus();
-            saveChatHistory(); // remember this conversation on this device
+            var st = document.getElementById('askStatus');
+            var btn = document.getElementById('askBtn');
+            var inp = document.getElementById('askInput');
+            if(st) st.textContent = '';
+            if(btn) btn.disabled = false;
+            if(inp) inp.focus();
+            saveChatHistory();
           }).catch(function(){ attempt(i + 1); });
         })(0);
+      }
+      function submitAsk(){
+        var liveInput = document.getElementById('askInput');
+        var liveAskBtn = document.getElementById('askBtn');
+        var liveStatus = document.getElementById('askStatus');
+        var q = liveInput ? liveInput.value.trim() : '';
+        if(!q || !liveAskBtn || liveAskBtn.disabled) return;
+        liveInput.value = '';
+        liveInput.style.height = '';
+        liveAskBtn.disabled = true;
+        if(liveStatus) liveStatus.textContent = 'Checking whether to switch waters…';
+        maybeRetargetOuting(q, liveStatus).then(function(switched){
+          if(switched){
+            // DOM rebuilt — ask with fresh context for the new river
+            setTimeout(function(){ postAsk(q); }, 80);
+          } else {
+            postAsk(q);
+          }
+        }).catch(function(){ postAsk(q); });
       }
       askBtn.addEventListener('click', submitAsk);
       // Enter sends, Shift+Enter makes a newline — like a real chat box
@@ -3923,6 +4247,13 @@
       input.addEventListener('input', function(){
         input.style.height = 'auto';
         input.style.height = Math.min(input.scrollHeight, 120) + 'px';
+      });
+      document.querySelectorAll('#askQuick .ff-ask-chip').forEach(function(chip){
+        chip.addEventListener('click', function(){
+          var liveInput = document.getElementById('askInput');
+          if(liveInput) liveInput.value = chip.getAttribute('data-ask') || '';
+          submitAsk();
+        });
       });
     }
     document.getElementById('tripSaveBtn').addEventListener('click', function(){
@@ -3960,7 +4291,7 @@
           return;
         }
         state.location = s.location;
-        state.notes = findWaterNotes(s.location.name, s.location.state);
+        state.notes = findWaterNotes(s.location.name, s.location.state, s.location.lat, s.location.lon);
         state.water = s.water;
         state.species = s.species;
         state.method = s.method;
@@ -4061,7 +4392,7 @@
       country: spot.country || prev.country || null,
       waterHint: waterHint
     };
-    state.notes = findWaterNotes(waterHint || state.location.name, state.location.state);
+    state.notes = findWaterNotes(waterHint || state.location.name, state.location.state, spot.lat, spot.lon);
     state.gauge = null; state.access = null; state.tide = null;
     state.aiRefine = null; state.recentWeather = null; state.bestWindow = null;
     state.askChat = [];
@@ -4287,7 +4618,7 @@
 
   function fishHere(name, lat, lon, stateName, notes){
     state.location = {name: name, region: stateName || '', state: stateName || null, lat: lat, lon: lon, country: stateName ? 'United States' : null};
-    state.notes = notes || findWaterNotes(name, stateName);
+    state.notes = notes || findWaterNotes(name, stateName, lat, lon);
     document.getElementById('exploreOverlay').classList.remove('open');
     document.getElementById('searchStatus').textContent = 'Set: ' + name;
     fetchWeather(lat, lon, document.getElementById('locateStatus')).catch(function(){});
@@ -4491,7 +4822,7 @@
     btn.textContent = 'Same spot as last time: ' + saved.location.name + ' →';
     btn.addEventListener('click', function(){
       state.location = saved.location;
-      state.notes = findWaterNotes(saved.location.name, saved.location.state);
+      state.notes = findWaterNotes(saved.location.name, saved.location.state, saved.location.lat, saved.location.lon);
       state.water = saved.water;
       state.species = saved.species;
       state.method = saved.method;
