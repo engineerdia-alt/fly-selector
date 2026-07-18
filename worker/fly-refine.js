@@ -16,7 +16,10 @@ export const ALLOWED_ORIGINS = [
   'https://engineerdia-alt.github.io',
   'https://flyfishinguniverse.com',
   'https://www.flyfishinguniverse.com',
-  'http://localhost:8791'
+  'http://localhost:8791',
+  'http://localhost:8081',
+  'http://127.0.0.1:8791',
+  'http://127.0.0.1:8081'
 ];
 
 // Sonnet for the reasoning-heavy guide + section reads; Haiku for cheap,

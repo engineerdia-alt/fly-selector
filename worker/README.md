@@ -21,7 +21,7 @@ page code, the repo, or the browser.
 - `https://flyfishinguniverse.com` (live shop embed)
 - `https://www.flyfishinguniverse.com`
 - `https://engineerdia-alt.github.io` (GitHub Pages)
-- `http://localhost:8791` (local)
+- `http://localhost:8791` / `http://localhost:8081` (local; also `127.0.0.1`)
 
 ## Deploy (one time, ~5 minutes)
 
